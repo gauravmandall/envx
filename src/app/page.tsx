@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
-import { Eye, EyeOff, Copy, Search, Shield, Key, CheckSquare, Square, Download, LogOut } from "lucide-react"
+import { Eye, EyeOff, Copy, Search, Shield, Key, CheckSquare, Square, Download, LogOut, Settings } from "lucide-react"
 
 interface EnvVariable {
   id: string
@@ -34,6 +34,12 @@ export default function EnvDashboard() {
   const [sessionTimeout, setSessionTimeout] = useState<NodeJS.Timeout | null>(null)
   const [failedAttempts, setFailedAttempts] = useState(0)
   const [isRateLimited, setIsRateLimited] = useState(false)
+  const [showChangePassword, setShowChangePassword] = useState(false)
+  const [changePasswordData, setChangePasswordData] = useState({
+    currentPassword: "",
+    newPassword: "",
+    confirmPassword: ""
+  })
 
   // Session management
   const resetSessionTimeout = useCallback(() => {
@@ -92,17 +98,28 @@ export default function EnvDashboard() {
     setLoading(true)
     setError("")
 
-    // Simulate authentication - replace with your actual auth logic
-    await new Promise((resolve) => setTimeout(resolve, 1000))
+    try {
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ password }),
+      })
 
-    if (password === "secure123") {
-      // Replace with your actual password check
-      setIsAuthenticated(true)
-      setFailedAttempts(0)
-      showNotification("success", "Successfully authenticated")
-    } else {
-      setFailedAttempts((prev) => prev + 1)
-      setError(`Invalid password. ${3 - failedAttempts - 1} attempts remaining.`)
+      const data = await response.json()
+
+      if (data.success) {
+        setIsAuthenticated(true)
+        setFailedAttempts(0)
+        showNotification("success", "Successfully authenticated")
+      } else {
+        setFailedAttempts((prev) => prev + 1)
+        setError(`Invalid password. ${3 - failedAttempts - 1} attempts remaining.`)
+      }
+    } catch (error) {
+      console.error("Login error:", error)
+      setError("Failed to authenticate. Please try again.")
     }
 
     setLoading(false)
@@ -112,8 +129,56 @@ export default function EnvDashboard() {
     setIsAuthenticated(false)
     setPassword("")
     setSelectedVars(new Set())
+    setShowChangePassword(false)
+    setChangePasswordData({ currentPassword: "", newPassword: "", confirmPassword: "" })
     if (sessionTimeout) clearTimeout(sessionTimeout)
     showNotification("success", "Logged out successfully")
+  }
+
+  const handleChangePassword = async () => {
+    const { currentPassword, newPassword, confirmPassword } = changePasswordData
+
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      showNotification("error", "All fields are required")
+      return
+    }
+
+    if (newPassword !== confirmPassword) {
+      showNotification("error", "New passwords do not match")
+      return
+    }
+
+    if (newPassword.length < 6) {
+      showNotification("error", "New password must be at least 6 characters long")
+      return
+    }
+
+    setLoading(true)
+
+    try {
+      const response = await fetch("/api/auth/change-password", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ currentPassword, newPassword }),
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        showNotification("success", "Password changed successfully")
+        setShowChangePassword(false)
+        setChangePasswordData({ currentPassword: "", newPassword: "", confirmPassword: "" })
+      } else {
+        showNotification("error", data.message || "Failed to change password")
+      }
+    } catch (error) {
+      console.error("Change password error:", error)
+      showNotification("error", "Failed to change password. Please try again.")
+    }
+
+    setLoading(false)
   }
 
   const toggleVisibility = (id: string) => {
@@ -238,6 +303,13 @@ export default function EnvDashboard() {
             <div className="px-3 py-1 text-xs font-medium border bg-emerald-500/10 border-emerald-500 text-emerald-400">
               AUTHENTICATED
             </div>
+            <button
+              onClick={() => setShowChangePassword(true)}
+              className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-white text-sm font-medium transition-colors flex items-center gap-2"
+            >
+              <Settings className="h-4 w-4" />
+              Change Password
+            </button>
             <button
               onClick={handleLogout}
               className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-white text-sm font-medium transition-colors flex items-center gap-2"
@@ -406,6 +478,72 @@ export default function EnvDashboard() {
           </div>
         </div>
       </div>
+
+      {/* Change Password Modal */}
+      {showChangePassword && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40 flex items-center justify-center p-4">
+          <div className="bg-zinc-900 border border-zinc-800 max-w-md w-full">
+            <div className="p-6 border-b border-zinc-800">
+              <h3 className="text-xl font-bold text-white tracking-tight">Change Password</h3>
+              <p className="text-zinc-400 mt-1 text-sm">Update your admin password</p>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-zinc-300 mb-2">Current Password</label>
+                <input
+                  type="password"
+                  value={changePasswordData.currentPassword}
+                  onChange={(e) => setChangePasswordData(prev => ({ ...prev, currentPassword: e.target.value }))}
+                  className="w-full bg-zinc-950 border border-zinc-700 text-white px-4 py-3 focus:outline-none focus:border-emerald-400 transition-colors"
+                  placeholder="Enter current password"
+                  autoComplete="current-password"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-zinc-300 mb-2">New Password</label>
+                <input
+                  type="password"
+                  value={changePasswordData.newPassword}
+                  onChange={(e) => setChangePasswordData(prev => ({ ...prev, newPassword: e.target.value }))}
+                  className="w-full bg-zinc-950 border border-zinc-700 text-white px-4 py-3 focus:outline-none focus:border-emerald-400 transition-colors"
+                  placeholder="Enter new password (min 6 characters)"
+                  autoComplete="new-password"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-zinc-300 mb-2">Confirm New Password</label>
+                <input
+                  type="password"
+                  value={changePasswordData.confirmPassword}
+                  onChange={(e) => setChangePasswordData(prev => ({ ...prev, confirmPassword: e.target.value }))}
+                  className="w-full bg-zinc-950 border border-zinc-700 text-white px-4 py-3 focus:outline-none focus:border-emerald-400 transition-colors"
+                  placeholder="Confirm new password"
+                  autoComplete="new-password"
+                />
+              </div>
+              <div className="flex gap-3 pt-4">
+                <button
+                  onClick={handleChangePassword}
+                  disabled={loading}
+                  className="flex-1 bg-emerald-500 hover:bg-emerald-600 disabled:bg-zinc-700 disabled:text-zinc-400 text-black font-medium py-3 transition-colors"
+                >
+                  {loading ? "Updating..." : "Update Password"}
+                </button>
+                <button
+                  onClick={() => {
+                    setShowChangePassword(false)
+                    setChangePasswordData({ currentPassword: "", newPassword: "", confirmPassword: "" })
+                  }}
+                  disabled={loading}
+                  className="flex-1 bg-zinc-800 hover:bg-zinc-700 disabled:bg-zinc-700 text-white font-medium py-3 transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Notification */}
       {notification && (

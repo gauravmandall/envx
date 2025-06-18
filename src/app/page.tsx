@@ -1,33 +1,23 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
-import { Eye, EyeOff, Copy, Search, Shield, Key, CheckSquare, Square, Download, LogOut, Settings } from "lucide-react"
+import { Eye, EyeOff, Copy, Search, Shield, Key, CheckSquare, Square, Download, LogOut, Settings, Plus, Edit, Trash2 } from "lucide-react"
 
 interface EnvVariable {
   id: string
   name: string
   value: string
   isVisible: boolean
+  createdAt?: string
+  updatedAt?: string
 }
-
-// Mock environment variables - replace with your actual data source
-const mockEnvVars: EnvVariable[] = [
-  { id: "1", name: "DATABASE_URL", value: "postgresql://user:password@localhost:5432/mydb", isVisible: false },
-  { id: "2", name: "API_SECRET_KEY", value: "sk_live_abcd1234567890efghijklmnop", isVisible: false },
-  { id: "3", name: "STRIPE_WEBHOOK_SECRET", value: "whsec_1234567890abcdefghijklmnop", isVisible: false },
-  { id: "4", name: "JWT_SECRET", value: "super-secret-jwt-key-2024", isVisible: false },
-  { id: "5", name: "REDIS_URL", value: "redis://localhost:6379", isVisible: false },
-  { id: "6", name: "SMTP_PASSWORD", value: "email-password-123", isVisible: false },
-  { id: "7", name: "OPENAI_API_KEY", value: "sk-proj-abcd1234567890", isVisible: false },
-  { id: "8", name: "GITHUB_CLIENT_SECRET", value: "github_secret_key_here", isVisible: false },
-]
 
 export default function EnvDashboard() {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [password, setPassword] = useState("")
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(false)
-  const [envVars, setEnvVars] = useState<EnvVariable[]>(mockEnvVars)
+  const [envVars, setEnvVars] = useState<EnvVariable[]>([])
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedVars, setSelectedVars] = useState<Set<string>>(new Set())
   const [notification, setNotification] = useState<{ type: "success" | "error"; message: string } | null>(null)
@@ -40,6 +30,107 @@ export default function EnvDashboard() {
     newPassword: "",
     confirmPassword: ""
   })
+  const [showAddEnvVar, setShowAddEnvVar] = useState(false)
+  const [showEditEnvVar, setShowEditEnvVar] = useState<string | null>(null)
+  const [envVarFormData, setEnvVarFormData] = useState({
+    name: "",
+    value: ""
+  })
+
+  // API functions for environment variables
+  const getAuthHeaders = () => ({
+    'Authorization': `Bearer ${password}`,
+    'Content-Type': 'application/json'
+  })
+
+  const fetchEnvVars = async () => {
+    try {
+      const response = await fetch('/api/env', {
+        headers: getAuthHeaders()
+      })
+      const data = await response.json()
+      
+      if (data.success) {
+        setEnvVars(data.data)
+      } else {
+        showNotification("error", "Failed to fetch environment variables")
+      }
+    } catch (error) {
+      console.error('Error fetching env vars:', error)
+      showNotification("error", "Failed to fetch environment variables")
+    }
+  }
+
+  const createEnvVar = async (name: string, value: string) => {
+    try {
+      const response = await fetch('/api/env', {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ name, value })
+      })
+      const data = await response.json()
+      
+      if (data.success) {
+        await fetchEnvVars() // Refresh the list
+        showNotification("success", "Environment variable created successfully")
+        return true
+      } else {
+        showNotification("error", data.message || "Failed to create environment variable")
+        return false
+      }
+    } catch (error) {
+      console.error('Error creating env var:', error)
+      showNotification("error", "Failed to create environment variable")
+      return false
+    }
+  }
+
+  const updateEnvVar = async (id: string, name: string, value: string) => {
+    try {
+      const response = await fetch(`/api/env/${id}`, {
+        method: 'PUT',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ name, value })
+      })
+      const data = await response.json()
+      
+      if (data.success) {
+        await fetchEnvVars() // Refresh the list
+        showNotification("success", "Environment variable updated successfully")
+        return true
+      } else {
+        showNotification("error", data.message || "Failed to update environment variable")
+        return false
+      }
+    } catch (error) {
+      console.error('Error updating env var:', error)
+      showNotification("error", "Failed to update environment variable")
+      return false
+    }
+  }
+
+  const deleteEnvVar = async (id: string) => {
+    try {
+      const response = await fetch(`/api/env/${id}`, {
+        method: 'DELETE',
+        headers: getAuthHeaders()
+      })
+      const data = await response.json()
+      
+      if (data.success) {
+        await fetchEnvVars() // Refresh the list
+        showNotification("success", "Environment variable deleted successfully")
+        return true
+      } else {
+        showNotification("error", data.message || "Failed to delete environment variable")
+        return false
+      }
+    } catch (error) {
+      console.error('Error deleting env var:', error)
+      showNotification("error", "Failed to delete environment variable")
+      return false
+    }
+  }
 
   // Session management
   const resetSessionTimeout = useCallback(() => {
@@ -113,6 +204,8 @@ export default function EnvDashboard() {
         setIsAuthenticated(true)
         setFailedAttempts(0)
         showNotification("success", "Successfully authenticated")
+        // Fetch environment variables after successful login
+        await fetchEnvVars()
       } else {
         setFailedAttempts((prev) => prev + 1)
         setError(`Invalid password. ${3 - failedAttempts - 1} attempts remaining.`)
@@ -179,6 +272,58 @@ export default function EnvDashboard() {
     }
 
     setLoading(false)
+  }
+
+  // Environment variable management handlers
+  const handleAddEnvVar = async () => {
+    const { name, value } = envVarFormData
+    
+    if (!name || !value) {
+      showNotification("error", "Name and value are required")
+      return
+    }
+    
+    setLoading(true)
+    const success = await createEnvVar(name, value)
+    
+    if (success) {
+      setShowAddEnvVar(false)
+      setEnvVarFormData({ name: "", value: "" })
+    }
+    
+    setLoading(false)
+  }
+
+  const handleEditEnvVar = async () => {
+    const { name, value } = envVarFormData
+    
+    if (!name || !value || !showEditEnvVar) {
+      showNotification("error", "Name and value are required")
+      return
+    }
+    
+    setLoading(true)
+    const success = await updateEnvVar(showEditEnvVar, name, value)
+    
+    if (success) {
+      setShowEditEnvVar(null)
+      setEnvVarFormData({ name: "", value: "" })
+    }
+    
+    setLoading(false)
+  }
+
+  const handleDeleteEnvVar = async (id: string, name: string) => {
+    if (confirm(`Are you sure you want to delete "${name}"?`)) {
+      setLoading(true)
+      await deleteEnvVar(id)
+      setLoading(false)
+    }
+  }
+
+  const openEditModal = (envVar: EnvVariable) => {
+    setEnvVarFormData({ name: envVar.name, value: envVar.value })
+    setShowEditEnvVar(envVar.id)
   }
 
   const toggleVisibility = (id: string) => {
@@ -353,6 +498,13 @@ export default function EnvDashboard() {
                 Copy Selected ({selectedVars.size})
               </button>
             )}
+            <button
+              onClick={() => setShowAddEnvVar(true)}
+              className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium transition-colors flex items-center gap-2"
+            >
+              <Plus className="h-4 w-4" />
+              Add Variable
+            </button>
           </div>
         </div>
 
@@ -387,6 +539,18 @@ export default function EnvDashboard() {
                           className="h-8 w-8 p-0 text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors flex items-center justify-center"
                         >
                           <Copy className="h-4 w-4" />
+                        </button>
+                        <button
+                          onClick={() => openEditModal(envVar)}
+                          className="h-8 w-8 p-0 text-zinc-400 hover:text-blue-400 hover:bg-zinc-800 transition-colors flex items-center justify-center"
+                        >
+                          <Edit className="h-4 w-4" />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteEnvVar(envVar.id, envVar.name)}
+                          className="h-8 w-8 p-0 text-zinc-400 hover:text-red-400 hover:bg-zinc-800 transition-colors flex items-center justify-center"
+                        >
+                          <Trash2 className="h-4 w-4" />
                         </button>
                       </div>
                     </div>
@@ -533,6 +697,118 @@ export default function EnvDashboard() {
                   onClick={() => {
                     setShowChangePassword(false)
                     setChangePasswordData({ currentPassword: "", newPassword: "", confirmPassword: "" })
+                  }}
+                  disabled={loading}
+                  className="flex-1 bg-zinc-800 hover:bg-zinc-700 disabled:bg-zinc-700 text-white font-medium py-3 transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Environment Variable Modal */}
+      {showAddEnvVar && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40 flex items-center justify-center p-4">
+          <div className="bg-zinc-900 border border-zinc-800 max-w-md w-full">
+            <div className="p-6 border-b border-zinc-800">
+              <h3 className="text-xl font-bold text-white tracking-tight">Add Environment Variable</h3>
+              <p className="text-zinc-400 mt-1 text-sm">Add a new environment variable</p>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-zinc-300 mb-2">Variable Name</label>
+                <input
+                  type="text"
+                  value={envVarFormData.name}
+                  onChange={(e) => setEnvVarFormData(prev => ({ ...prev, name: e.target.value.toUpperCase() }))}
+                  className="w-full bg-zinc-950 border border-zinc-700 text-white px-4 py-3 focus:outline-none focus:border-emerald-400 transition-colors font-mono"
+                  placeholder="DATABASE_URL"
+                  autoComplete="off"
+                />
+                <p className="text-xs text-zinc-500 mt-1">Use uppercase letters, numbers, and underscores only</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-zinc-300 mb-2">Variable Value</label>
+                <textarea
+                  value={envVarFormData.value}
+                  onChange={(e) => setEnvVarFormData(prev => ({ ...prev, value: e.target.value }))}
+                  className="w-full bg-zinc-950 border border-zinc-700 text-white px-4 py-3 focus:outline-none focus:border-emerald-400 transition-colors font-mono"
+                  placeholder="Enter the value for this environment variable"
+                  rows={3}
+                  autoComplete="off"
+                />
+              </div>
+              <div className="flex gap-3 pt-4">
+                <button
+                  onClick={handleAddEnvVar}
+                  disabled={loading}
+                  className="flex-1 bg-emerald-500 hover:bg-emerald-600 disabled:bg-zinc-700 disabled:text-zinc-400 text-black font-medium py-3 transition-colors"
+                >
+                  {loading ? "Adding..." : "Add Variable"}
+                </button>
+                <button
+                  onClick={() => {
+                    setShowAddEnvVar(false)
+                    setEnvVarFormData({ name: "", value: "" })
+                  }}
+                  disabled={loading}
+                  className="flex-1 bg-zinc-800 hover:bg-zinc-700 disabled:bg-zinc-700 text-white font-medium py-3 transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Environment Variable Modal */}
+      {showEditEnvVar && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40 flex items-center justify-center p-4">
+          <div className="bg-zinc-900 border border-zinc-800 max-w-md w-full">
+            <div className="p-6 border-b border-zinc-800">
+              <h3 className="text-xl font-bold text-white tracking-tight">Edit Environment Variable</h3>
+              <p className="text-zinc-400 mt-1 text-sm">Update environment variable</p>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-zinc-300 mb-2">Variable Name</label>
+                <input
+                  type="text"
+                  value={envVarFormData.name}
+                  onChange={(e) => setEnvVarFormData(prev => ({ ...prev, name: e.target.value.toUpperCase() }))}
+                  className="w-full bg-zinc-950 border border-zinc-700 text-white px-4 py-3 focus:outline-none focus:border-emerald-400 transition-colors font-mono"
+                  placeholder="DATABASE_URL"
+                  autoComplete="off"
+                />
+                <p className="text-xs text-zinc-500 mt-1">Use uppercase letters, numbers, and underscores only</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-zinc-300 mb-2">Variable Value</label>
+                <textarea
+                  value={envVarFormData.value}
+                  onChange={(e) => setEnvVarFormData(prev => ({ ...prev, value: e.target.value }))}
+                  className="w-full bg-zinc-950 border border-zinc-700 text-white px-4 py-3 focus:outline-none focus:border-emerald-400 transition-colors font-mono"
+                  placeholder="Enter the value for this environment variable"
+                  rows={3}
+                  autoComplete="off"
+                />
+              </div>
+              <div className="flex gap-3 pt-4">
+                <button
+                  onClick={handleEditEnvVar}
+                  disabled={loading}
+                  className="flex-1 bg-emerald-500 hover:bg-emerald-600 disabled:bg-zinc-700 disabled:text-zinc-400 text-black font-medium py-3 transition-colors"
+                >
+                  {loading ? "Updating..." : "Update Variable"}
+                </button>
+                <button
+                  onClick={() => {
+                    setShowEditEnvVar(null)
+                    setEnvVarFormData({ name: "", value: "" })
                   }}
                   disabled={loading}
                   className="flex-1 bg-zinc-800 hover:bg-zinc-700 disabled:bg-zinc-700 text-white font-medium py-3 transition-colors"

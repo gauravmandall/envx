@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    const envVars = getAllEnvVars()
+    const envVars = await getAllEnvVars()
     
     return NextResponse.json({
       success: true,
@@ -70,7 +70,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const newEnvVar = createEnvVar(name, value)
+    const newEnvVar = await createEnvVar(name, value)
     
     return NextResponse.json({
       success: true,

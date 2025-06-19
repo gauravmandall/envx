@@ -23,7 +23,7 @@ export async function GET(
     }
 
     const { id } = await params
-    const envVar = getEnvVarById(id)
+    const envVar = await getEnvVarById(id)
     
     if (!envVar) {
       return NextResponse.json(
@@ -83,7 +83,7 @@ export async function PUT(
       )
     }
 
-    const updatedEnvVar = updateEnvVar(id, name, value)
+    const updatedEnvVar = await updateEnvVar(id, name, value)
     
     return NextResponse.json({
       success: true,
@@ -136,7 +136,7 @@ export async function DELETE(
     }
 
     const { id } = await params
-    const deleted = deleteEnvVar(id)
+    const deleted = await deleteEnvVar(id)
     
     if (!deleted) {
       return NextResponse.json(

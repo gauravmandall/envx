@@ -498,3 +498,37 @@ We welcome contributions from the community! Here's how you can help:
 [![Maintenance](https://img.shields.io/badge/Maintained-yes-green.svg)](https://github.com/gauravmandall/envx/graphs/commit-activity)
 
 </div>
+
+## 🔌 Database Storage (Supabase Setup)
+
+EnvX now supports persistent storage with Supabase for keeping your environment variables safe across deployments and device logins.
+
+### 1. Create a Supabase Account and Project
+
+1. Go to [Supabase.com](https://supabase.com/) and create an account
+2. Create a new project
+3. Once your project is created, navigate to **Project Settings** > **API**
+4. Copy your **Project URL** and **service_role key** (NOT the anon public key)
+
+### 2. Set Up Environment Variables
+
+Add these variables to your `.env.local` file:
+
+```bash
+# Supabase Configuration
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
+SUPABASE_SERVICE_KEY=your_service_role_key
+```
+
+For Vercel deployments, add these same environment variables in the Vercel project settings.
+
+### 3. Run the Setup Script
+
+This script will initialize your Supabase database with the required table:
+
+```bash
+npm install dotenv
+node supabase-setup.js
+```
+
+Now your environment variables will persist across deployments, server restarts, and device changes!

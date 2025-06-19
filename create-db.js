@@ -14,8 +14,10 @@ async function setupDatabase() {
   
   const client = new Client({
     connectionString: process.env.DATABASE_URL,
-    // Uncomment if needed for cloud databases
-    // ssl: { rejectUnauthorized: false }
+    // Enable SSL for cloud databases, and accept self-signed certificates
+    ssl: { 
+      rejectUnauthorized: false 
+    }
   });
   
   try {

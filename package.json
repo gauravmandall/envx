@@ -5,13 +5,14 @@
   "scripts": {
     "setup": "node setup.js",
     "dev": "next dev",
-    "build": "next build",
+    "build": "node setup-db.js && next build",
     "start": "next start",
     "lint": "next lint",
     "prisma:generate": "prisma generate",
     "prisma:push": "prisma db push",
     "prisma:migrate": "prisma migrate dev",
-    "db:setup": "node prisma-setup.js"
+    "db:setup": "node setup-db.js",
+    "db:test": "node check-db.js"
   },
   "dependencies": {
     "@prisma/client": "^6.10.1",

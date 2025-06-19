@@ -105,7 +105,7 @@ Edit `.env.local` and set your configuration:
 
 ```bash
 # Generate a secure admin password
-ADMIN_PASSWORD=your_secure_admin_password_here
+ADMIN_PASSWORD=your_secure_admin_password
 
 # Generate a secure encryption key (CRITICAL - NEVER LOSE THIS!)
 MASTER_ENCRYPTION_KEY=your_64_character_hex_encryption_key_here
@@ -515,9 +515,9 @@ We welcome contributions from the community! Here's how you can help:
 
 </div>
 
-## 🔌 Database Storage with Prisma
+## 🔌 Database Setup with PostgreSQL
 
-EnvX now uses Prisma ORM with PostgreSQL for reliable, persistent storage of your environment variables across deployments and devices.
+EnvX uses PostgreSQL for persistent storage of your environment variables across deployments and devices.
 
 ### 1. Set Up a PostgreSQL Database
 
@@ -529,45 +529,37 @@ You'll need a PostgreSQL database. Options include:
 4. **Railway.app**: Easy to deploy PostgreSQL database
 5. **Any PostgreSQL**: Self-hosted or other cloud provider
 
-Get your database connection string in this format:
-```
-postgresql://username:password@hostname:port/database
-```
-
 ### 2. Configure Your Environment Variables
 
-Add this to your `.env.local` file:
+Create a `.env` file with your database connection:
 
 ```bash
 # PostgreSQL Connection String
-DATABASE_URL=postgresql://username:password@hostname:port/database
+DATABASE_URL="postgresql://username:password@hostname:port/database?sslmode=require"
 
 # Security
 ADMIN_PASSWORD=your_secure_admin_password
 MASTER_ENCRYPTION_KEY=your_secure_encryption_key
 ```
 
-For Vercel deployments, add these same environment variables in the Vercel project settings.
+For cloud databases (Supabase, Neon, etc.), make sure to add `?sslmode=require` to the connection string.
 
-### 3. Run the Setup Script
+### 3. Run the Database Setup Script
 
-This will set up your database with the required tables:
+Our setup script handles SSL certificate issues automatically:
 
 ```bash
-# Install Prisma dependencies
-npm install prisma @prisma/client
-
 # Run the setup script
-node prisma-setup.js
+npm run db:setup
 ```
 
-### 4. Initialize Database After Deployment
+This creates all the necessary database tables and generates the Prisma client.
 
-After deploying to Vercel, you need to initialize the database connection:
+### 4. Deploy to Vercel
 
-```bash
-curl -X GET https://your-app-url.vercel.app/api/setup \
-  -H "Authorization: Bearer your_admin_password"
-```
+When deploying to Vercel:
 
-Replace `your-app-url.vercel.app` with your deployed URL and `your_admin_password` with your ADMIN_PASSWORD value.
+1. Add the same environment variables in Vercel project settings
+2. Vercel will automatically run the setup script during build
+
+Your environment variables are now securely stored in PostgreSQL and will persist across deployments, server restarts, and different devices!

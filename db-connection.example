@@ -1,0 +1,20 @@
+# Database Connection Examples
+
+# Standard PostgreSQL connection
+DATABASE_URL="postgresql://username:password@hostname:port/database"
+
+# PostgreSQL with SSL (for cloud databases like Supabase, Heroku, etc.)
+DATABASE_URL="postgresql://username:password@hostname:port/database?sslmode=require"
+
+# PostgreSQL with SSL and connection limit (for Vercel deployments)
+DATABASE_URL="postgresql://username:password@hostname:port/database?sslmode=require&connection_limit=5"
+
+# Neon.tech serverless PostgreSQL
+DATABASE_URL="postgresql://username:password@hostname:port/database?sslmode=require&pgbouncer=true"
+
+# When using pgBouncer (connection pooling), set statement_cache_mode to avoid prepared statement issues:
+DATABASE_URL="postgresql://username:password@hostname:port/database?pgbouncer=true&statement_cache_mode=describe"
+
+# Special characters in password need to be URL encoded
+# For example, if password is "p@ssw0rd!", use:
+# DATABASE_URL="postgresql://username:p%40ssw0rd%21@hostname:port/database" 

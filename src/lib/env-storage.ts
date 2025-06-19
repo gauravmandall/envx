@@ -2,6 +2,7 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs'
 import { join } from 'path'
 import { encrypt, decrypt } from './crypto'
 import { prisma } from './prisma'
+import type { EnvironmentVariable } from '@prisma/client'
 
 export interface StoredEnvVariable {
   id: string
@@ -55,7 +56,7 @@ async function readStoredEnvVarsFromDb(): Promise<StoredEnvVariable[]> {
     const envVars = await prisma.environmentVariable.findMany();
     
     // Transform from DB format to StoredEnvVariable format
-    return envVars.map((item: { id: any; name: any; encryptedValue: any; createdAt: { toISOString: () => any }; updatedAt: { toISOString: () => any } }) => ({
+    return envVars.map((item: EnvironmentVariable) => ({
       id: item.id,
       name: item.name,
       encryptedValue: item.encryptedValue,

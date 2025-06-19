@@ -12,8 +12,10 @@ async function testConnection() {
   
   const client = new Client({
     connectionString: process.env.DATABASE_URL,
-    // Add SSL config if needed (for services like Heroku, Supabase, etc.)
-    // ssl: { rejectUnauthorized: false }
+    // Enable SSL for cloud databases, and accept self-signed certificates
+    ssl: { 
+      rejectUnauthorized: false 
+    }
   });
   
   try {

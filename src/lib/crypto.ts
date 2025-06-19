@@ -30,7 +30,6 @@ function getMasterKey(): string {
       console.warn('Using fallback key derived from deployment URL. This is less secure. Please set MASTER_ENCRYPTION_KEY.')
       
       // Generate a consistent 64-character hex key from the fallback source
-      const crypto = require('crypto')
       const hash1 = crypto.createHash('sha256').update(fallbackSource).digest('hex')
       const hash2 = crypto.createHash('sha256').update(hash1).digest('hex')
       return hash1 + hash2.substring(0, 32) // 64 characters

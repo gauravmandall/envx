@@ -18,10 +18,17 @@ export interface EnvVariable {
   updatedAt: string
 }
 
-const ENV_STORAGE_PATH = join(process.cwd(), 'data', 'env-variables.json')
+// In-memory storage for environments without filesystem write access (like Vercel production)
+let inMemoryStorage: StoredEnvVariable[] = [];
+const isVercelProduction = process.env.VERCEL_ENV === 'production';
+const ENV_STORAGE_PATH = join(process.cwd(), 'data', 'env-variables.json');
 
 // Ensure data directory exists
 function ensureDataDirectory() {
+  if (isVercelProduction) {
+    return; // Skip filesystem operations in Vercel production
+  }
+  
   const dataDir = join(process.cwd(), 'data')
   if (!existsSync(dataDir)) {
     mkdirSync(dataDir, { recursive: true })
@@ -30,6 +37,11 @@ function ensureDataDirectory() {
 
 // Read encrypted environment variables from storage
 function readStoredEnvVars(): StoredEnvVariable[] {
+  // If we have in-memory data and we're in Vercel production, use that
+  if (isVercelProduction) {
+    return [...inMemoryStorage]; // Return a copy to prevent accidental mutation
+  }
+  
   ensureDataDirectory()
   
   if (!existsSync(ENV_STORAGE_PATH)) {
@@ -47,13 +59,21 @@ function readStoredEnvVars(): StoredEnvVariable[] {
 
 // Write encrypted environment variables to storage
 function writeStoredEnvVars(envVars: StoredEnvVariable[]) {
+  if (isVercelProduction) {
+    // In Vercel production, store in memory instead
+    inMemoryStorage = [...envVars];
+    return;
+  }
+  
   ensureDataDirectory()
   
   try {
     writeFileSync(ENV_STORAGE_PATH, JSON.stringify(envVars, null, 2))
   } catch (error) {
     console.error('Error writing env storage:', error)
-    throw new Error('Failed to save environment variables')
+    // Fallback to in-memory storage if file writing fails
+    inMemoryStorage = [...envVars];
+    console.log('Using in-memory storage as fallback')
   }
 }
 

@@ -276,22 +276,75 @@ export default function EnvDashboard() {
 
   // Environment variable management handlers
   const handleAddEnvVar = async () => {
-    const { name, value } = envVarFormData
+    const { name, value } = envVarFormData;
     
     if (!name || !value) {
-      showNotification("error", "Name and value are required")
-      return
+      showNotification("error", "Name and value are required");
+      return;
     }
     
-    setLoading(true)
-    const success = await createEnvVar(name, value)
+    setLoading(true);
+    const success = await createEnvVar(name, value);
     
     if (success) {
-      setShowAddEnvVar(false)
-      setEnvVarFormData({ name: "", value: "" })
+      setShowAddEnvVar(false);
+      setEnvVarFormData({ name: "", value: "" });
+      
+      // Check for pending environment variables to import
+      const pendingVarsJSON = sessionStorage.getItem('pendingEnvVars');
+      if (pendingVarsJSON) {
+        try {
+          const pendingVars = JSON.parse(pendingVarsJSON);
+          if (Array.isArray(pendingVars) && pendingVars.length > 0) {
+            // Clear pending vars to avoid duplicates
+            sessionStorage.removeItem('pendingEnvVars');
+            
+            // Process bulk import
+            bulkImportEnvVars(pendingVars);
+          }
+        } catch (error) {
+          console.error('Error processing pending env vars:', error);
+        }
+      }
     }
     
-    setLoading(false)
+    setLoading(false);
+  }
+  
+  // Bulk import environment variables
+  const bulkImportEnvVars = async (envVars: Array<{ name: string; value: string }>) => {
+    let successCount = 0;
+    let errorCount = 0;
+    
+    // Process each environment variable
+    for (const { name, value } of envVars) {
+      if (!name || !value) {
+        errorCount++;
+        continue;
+      }
+      
+      try {
+        const success = await createEnvVar(name, value);
+        if (success) {
+          successCount++;
+        } else {
+          errorCount++;
+        }
+      } catch (error) {
+        console.error(`Error importing ${name}:`, error);
+        errorCount++;
+      }
+    }
+    
+    // Update the notification
+    if (successCount > 0) {
+      showNotification("success", `Successfully imported ${successCount} variables${errorCount > 0 ? ` (${errorCount} failed)` : ''}`);
+    } else if (errorCount > 0) {
+      showNotification("error", `Failed to import ${errorCount} variables`);
+    }
+    
+    // Refresh the list
+    await fetchEnvVars();
   }
 
   const handleEditEnvVar = async () => {
@@ -724,22 +777,134 @@ export default function EnvDashboard() {
                   type="text"
                   value={envVarFormData.name}
                   onChange={(e) => setEnvVarFormData(prev => ({ ...prev, name: e.target.value.toUpperCase() }))}
+                  onPaste={(e) => {
+                    // Get pasted text from clipboard
+                    const pastedText = e.clipboardData.getData('text');
+                    
+                    // Check if it looks like an environment variable with NAME=VALUE format
+                    const envVarRegex = /^([A-Z][A-Z0-9_]*)=(.+)$/;
+                    const match = pastedText.trim().match(envVarRegex);
+                    
+                    if (match) {
+                      // It's a NAME=VALUE format, prevent default and set both fields
+                      e.preventDefault();
+                      setEnvVarFormData({
+                        name: match[1],
+                        value: match[2]
+                      });
+                    } else if (pastedText.includes('\n')) {
+                      // It might contain multiple environment variables
+                      e.preventDefault();
+                      const lines = pastedText.split('\n').filter(line => line.trim());
+                      if (lines.length > 0) {
+                        // Take the first line for this form
+                        const firstLine = lines[0];
+                        const firstMatch = firstLine.match(envVarRegex);
+                        
+                        if (firstMatch) {
+                          setEnvVarFormData({
+                            name: firstMatch[1],
+                            value: firstMatch[2]
+                          });
+                          
+                          // If there are more lines, process them after this one is created
+                          if (lines.length > 1) {
+                            const remainingVars = lines.slice(1).map(line => {
+                              const match = line.match(envVarRegex);
+                              if (match) {
+                                return { name: match[1], value: match[2] };
+                              }
+                              return null;
+                            }).filter(Boolean);
+                            
+                            // Queue these for bulk import after this one is saved
+                            if (remainingVars.length > 0) {
+                              // Store for bulk import after current variable is saved
+                              sessionStorage.setItem('pendingEnvVars', JSON.stringify(remainingVars));
+                              showNotification("success", `Found ${remainingVars.length} more variables to import`);
+                            }
+                          }
+                        }
+                        // If it's not in NAME=VALUE format, let default paste behavior happen
+                      }
+                    }
+                    // If it doesn't match any of our patterns, let default paste behavior happen
+                  }}
                   className="w-full bg-zinc-950 border border-zinc-700 text-white px-4 py-3 focus:outline-none focus:border-emerald-400 transition-colors font-mono"
                   placeholder="DATABASE_URL"
                   autoComplete="off"
                 />
-                <p className="text-xs text-zinc-500 mt-1">Use uppercase letters, numbers, and underscores only</p>
+                <p className="text-xs text-zinc-500 mt-1">Use uppercase letters, numbers, and underscores only. Paste NAME=VALUE to fill both fields.</p>
               </div>
               <div>
                 <label className="block text-sm font-medium text-zinc-300 mb-2">Variable Value</label>
                 <textarea
                   value={envVarFormData.value}
                   onChange={(e) => setEnvVarFormData(prev => ({ ...prev, value: e.target.value }))}
+                  onPaste={(e) => {
+                    // Prevent default paste behavior
+                    e.preventDefault();
+                    
+                    // Get pasted text from clipboard
+                    const pastedText = e.clipboardData.getData('text');
+                    
+                    // Check if it looks like an environment variable with NAME=VALUE format
+                    const envVarRegex = /^([A-Z][A-Z0-9_]*)=(.+)$/;
+                    const match = pastedText.trim().match(envVarRegex);
+                    
+                    if (match) {
+                      // It's a single NAME=VALUE format
+                      setEnvVarFormData({
+                        name: match[1],
+                        value: match[2]
+                      });
+                    } else if (pastedText.includes('\n')) {
+                      // It might contain multiple environment variables
+                      const lines = pastedText.split('\n').filter(line => line.trim());
+                      if (lines.length > 0) {
+                        // Take the first line for this form
+                        const firstLine = lines[0];
+                        const firstMatch = firstLine.match(envVarRegex);
+                        
+                        if (firstMatch) {
+                          setEnvVarFormData({
+                            name: firstMatch[1],
+                            value: firstMatch[2]
+                          });
+                          
+                          // If there are more lines, process them after this one is created
+                          if (lines.length > 1) {
+                            const remainingVars = lines.slice(1).map(line => {
+                              const match = line.match(envVarRegex);
+                              if (match) {
+                                return { name: match[1], value: match[2] };
+                              }
+                              return null;
+                            }).filter(Boolean);
+                            
+                            // Queue these for bulk import after this one is saved
+                            if (remainingVars.length > 0) {
+                              // Store for bulk import after current variable is saved
+                              sessionStorage.setItem('pendingEnvVars', JSON.stringify(remainingVars));
+                              showNotification("success", `Found ${remainingVars.length} more variables to import`);
+                            }
+                          }
+                        } else {
+                          // Not in NAME=VALUE format, just use as value
+                          setEnvVarFormData(prev => ({ ...prev, value: pastedText }));
+                        }
+                      }
+                    } else {
+                      // Not in NAME=VALUE format, just use as value
+                      setEnvVarFormData(prev => ({ ...prev, value: pastedText }));
+                    }
+                  }}
                   className="w-full bg-zinc-950 border border-zinc-700 text-white px-4 py-3 focus:outline-none focus:border-emerald-400 transition-colors font-mono"
-                  placeholder="Enter the value for this environment variable"
+                  placeholder="Enter the value or paste NAME=VALUE format"
                   rows={3}
                   autoComplete="off"
                 />
+                <p className="text-xs text-zinc-500 mt-1">Paste in NAME=VALUE format to auto-fill both fields</p>
               </div>
               <div className="flex gap-3 pt-4">
                 <button
@@ -780,19 +945,74 @@ export default function EnvDashboard() {
                   type="text"
                   value={envVarFormData.name}
                   onChange={(e) => setEnvVarFormData(prev => ({ ...prev, name: e.target.value.toUpperCase() }))}
+                  onPaste={(e) => {
+                    // Get pasted text from clipboard
+                    const pastedText = e.clipboardData.getData('text');
+                    
+                    // Check if it looks like an environment variable with NAME=VALUE format
+                    const envVarRegex = /^([A-Z][A-Z0-9_]*)=(.+)$/;
+                    const match = pastedText.trim().match(envVarRegex);
+                    
+                    if (match) {
+                      // It's a NAME=VALUE format, prevent default and set both fields
+                      e.preventDefault();
+                      setEnvVarFormData({
+                        name: match[1],
+                        value: match[2]
+                      });
+                    } else if (pastedText.includes('\n')) {
+                      // It might contain multiple environment variables
+                      e.preventDefault();
+                      const lines = pastedText.split('\n').filter(line => line.trim());
+                      if (lines.length > 0) {
+                        // Take the first line for this form
+                        const firstLine = lines[0];
+                        const firstMatch = firstLine.match(envVarRegex);
+                        
+                        if (firstMatch) {
+                          setEnvVarFormData({
+                            name: firstMatch[1],
+                            value: firstMatch[2]
+                          });
+                        }
+                      }
+                    }
+                  }}
                   className="w-full bg-zinc-950 border border-zinc-700 text-white px-4 py-3 focus:outline-none focus:border-emerald-400 transition-colors font-mono"
                   placeholder="DATABASE_URL"
                   autoComplete="off"
                 />
-                <p className="text-xs text-zinc-500 mt-1">Use uppercase letters, numbers, and underscores only</p>
+                <p className="text-xs text-zinc-500 mt-1">Use uppercase letters, numbers, and underscores only. Paste NAME=VALUE to fill both fields.</p>
               </div>
               <div>
                 <label className="block text-sm font-medium text-zinc-300 mb-2">Variable Value</label>
                 <textarea
                   value={envVarFormData.value}
                   onChange={(e) => setEnvVarFormData(prev => ({ ...prev, value: e.target.value }))}
+                  onPaste={(e) => {
+                    // Prevent default paste behavior
+                    e.preventDefault();
+                    
+                    // Get pasted text from clipboard
+                    const pastedText = e.clipboardData.getData('text');
+                    
+                    // Check if it looks like an environment variable with NAME=VALUE format
+                    const envVarRegex = /^([A-Z][A-Z0-9_]*)=(.+)$/;
+                    const match = pastedText.trim().match(envVarRegex);
+                    
+                    if (match) {
+                      // It's a single NAME=VALUE format
+                      setEnvVarFormData({
+                        name: match[1],
+                        value: match[2]
+                      });
+                    } else {
+                      // Not in NAME=VALUE format, just use as value
+                      setEnvVarFormData(prev => ({ ...prev, value: pastedText }));
+                    }
+                  }}
                   className="w-full bg-zinc-950 border border-zinc-700 text-white px-4 py-3 focus:outline-none focus:border-emerald-400 transition-colors font-mono"
-                  placeholder="Enter the value for this environment variable"
+                  placeholder="Enter the value or paste NAME=VALUE format"
                   rows={3}
                   autoComplete="off"
                 />

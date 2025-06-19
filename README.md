@@ -133,6 +133,22 @@ bun dev
 
 Open [http://localhost:3000](http://localhost:3000) with your browser.
 
+### 4. Initialize Supabase After Deployment
+
+After deploying to Vercel, you need to initialize the Supabase table:
+
+1. Make sure your application is deployed with all required environment variables
+2. Call the initialization endpoint once to create the database table:
+
+```bash
+curl -X GET https://your-app-url.vercel.app/api/setup \
+  -H "Authorization: Bearer your_admin_password"
+```
+
+Replace `your-app-url.vercel.app` with your actual deployed URL and `your_admin_password` with your ADMIN_PASSWORD value.
+
+This endpoint only needs to be called once after deployment. It will create the necessary table structure in your Supabase database.
+
 ## 📋 Usage
 
 ### First Time Setup

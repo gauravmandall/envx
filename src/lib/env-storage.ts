@@ -32,9 +32,19 @@ export function clearCache() {
 
 // Ensure data directory exists (for development only)
 function ensureDataDirectory() {
+  // Skip directory creation in serverless environments
+  if (process.env.VERCEL) {
+    return;
+  }
+  
   const dataDir = join(process.cwd(), 'data')
   if (!existsSync(dataDir)) {
-    mkdirSync(dataDir, { recursive: true })
+    try {
+      mkdirSync(dataDir, { recursive: true })
+    } catch (error) {
+      console.error('Failed to create data directory, but continuing anyway:', error);
+      // Don't throw error - we'll use Supabase for storage instead
+    }
   }
 }
 
@@ -48,6 +58,45 @@ async function readStoredEnvVarsFromSupabase(): Promise<StoredEnvVariable[]> {
     
     if (error) {
       console.error('Error fetching from Supabase:', error);
+      
+      // If the table doesn't exist, try to create it
+      if (error.code === '42P01') { // PostgreSQL error code for "relation does not exist"
+        console.log('Table does not exist, attempting to create it...');
+        
+        try {
+          // Create a dummy record to initialize the table
+          const dummyRecord = {
+            id: 'init_' + Date.now().toString(),
+            name: 'INIT_VAR',
+            encrypted_value: 'init_value',
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          };
+          
+          const { error: createError } = await supabase
+            .from(ENV_VARS_TABLE)
+            .insert(dummyRecord);
+            
+          if (createError) {
+            console.error('Failed to create table:', createError);
+          } else {
+            console.log('Successfully created table and inserted dummy record');
+            
+            // Delete the dummy record
+            await supabase
+              .from(ENV_VARS_TABLE)
+              .delete()
+              .eq('id', dummyRecord.id);
+              
+            // Return empty array as the table was just created
+            return [];
+          }
+        } catch (initError) {
+          console.error('Error initializing table:', initError);
+        }
+      }
+      
+      // Fall back to file storage if Supabase fails
       return readStoredEnvVarsFromFile();
     }
     
@@ -68,13 +117,19 @@ async function readStoredEnvVarsFromSupabase(): Promise<StoredEnvVariable[]> {
 
 // Read from file (fallback for development or if Supabase fails)
 function readStoredEnvVarsFromFile(): StoredEnvVariable[] {
-  ensureDataDirectory();
-  
-  if (!existsSync(ENV_STORAGE_PATH)) {
+  // Don't attempt to read from filesystem in serverless environments
+  if (process.env.VERCEL) {
+    console.log('Skipping file read in serverless environment');
     return [];
   }
   
   try {
+    ensureDataDirectory();
+    
+    if (!existsSync(ENV_STORAGE_PATH)) {
+      return [];
+    }
+    
     const data = readFileSync(ENV_STORAGE_PATH, 'utf8');
     return JSON.parse(data);
   } catch (error) {
@@ -127,9 +182,14 @@ async function writeStoredEnvVarsToSupabase(envVars: StoredEnvVariable[]): Promi
 
 // Fallback write to file
 function writeStoredEnvVarsToFile(envVars: StoredEnvVariable[]): boolean {
-  ensureDataDirectory();
+  // Don't attempt to write to filesystem in serverless environments
+  if (process.env.VERCEL) {
+    console.log('Skipping file write in serverless environment');
+    return false;
+  }
   
   try {
+    ensureDataDirectory();
     writeFileSync(ENV_STORAGE_PATH, JSON.stringify(envVars, null, 2));
     envVarsCache = [...envVars];
     return true;

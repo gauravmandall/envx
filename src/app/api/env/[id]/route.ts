@@ -10,7 +10,10 @@ function isAuthenticated(request: NextRequest): boolean {
 }
 
 // GET /api/env/[id] - Get single environment variable
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(
+  request: NextRequest,
+  context: { params: { id: string } }
+) {
   try {
     if (!isAuthenticated(request)) {
       return NextResponse.json(
@@ -19,7 +22,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       )
     }
 
-    const envVar = getEnvVarById(params.id)
+    const envVar = getEnvVarById(context.params.id)
     
     if (!envVar) {
       return NextResponse.json(
@@ -49,7 +52,10 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
 }
 
 // PUT /api/env/[id] - Update environment variable
-export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
+export async function PUT(
+  request: NextRequest,
+  context: { params: { id: string } }
+) {
   try {
     if (!isAuthenticated(request)) {
       return NextResponse.json(
@@ -75,7 +81,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
       )
     }
 
-    const updatedEnvVar = updateEnvVar(params.id, name, value)
+    const updatedEnvVar = updateEnvVar(context.params.id, name, value)
     
     return NextResponse.json({
       success: true,
@@ -115,7 +121,10 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
 }
 
 // DELETE /api/env/[id] - Delete environment variable
-export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(
+  request: NextRequest,
+  context: { params: { id: string } }
+) {
   try {
     if (!isAuthenticated(request)) {
       return NextResponse.json(
@@ -124,7 +133,7 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
       )
     }
 
-    const deleted = deleteEnvVar(params.id)
+    const deleted = deleteEnvVar(context.params.id)
     
     if (!deleted) {
       return NextResponse.json(

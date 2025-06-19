@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync, existsSync } from 'fs'
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs'
 import { join } from 'path'
 import { encrypt, decrypt } from './crypto'
 
@@ -24,7 +24,7 @@ const ENV_STORAGE_PATH = join(process.cwd(), 'data', 'env-variables.json')
 function ensureDataDirectory() {
   const dataDir = join(process.cwd(), 'data')
   if (!existsSync(dataDir)) {
-    require('fs').mkdirSync(dataDir, { recursive: true })
+    mkdirSync(dataDir, { recursive: true })
   }
 }
 

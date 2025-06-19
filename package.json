@@ -3,16 +3,16 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "setup": "node setup.js",
+    "setup": "ts-node -P tsconfig.scripts.json src/scripts/setup.ts",
     "dev": "next dev",
-    "build": "node setup-db.js && next build",
+    "build": "ts-node -P tsconfig.scripts.json src/scripts/setup-db.ts && next build",
     "start": "next start",
     "lint": "next lint",
     "prisma:generate": "prisma generate",
     "prisma:push": "prisma db push",
     "prisma:migrate": "prisma migrate dev",
-    "db:setup": "node setup-db.js",
-    "db:test": "node check-db.js"
+    "db:setup": "ts-node -P tsconfig.scripts.json src/scripts/setup-db.ts",
+    "db:test": "ts-node -P tsconfig.scripts.json src/scripts/check-db.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.10.1",
@@ -32,6 +32,7 @@
     "@eslint/eslintrc": "^3",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
+    "@types/pg": "^8.15.4",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "autoprefixer": "^10.4.21",
@@ -39,6 +40,7 @@
     "eslint": "^9",
     "eslint-config-next": "15.3.3",
     "tailwindcss": "^4",
+    "ts-node": "^10.9.2",
     "tw-animate-css": "^1.3.4",
     "typescript": "^5"
   }

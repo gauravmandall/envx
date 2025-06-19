@@ -203,25 +203,30 @@ graph TD
 
 ```
 src/
-├── app/
-│   ├── api/
-│   │   ├── auth/
-│   │   │   ├── login/           # Authentication endpoint
-│   │   │   └── change-password/ # Password management
-│   │   └── env/                 # Environment variable CRUD
-│   │       ├── route.ts         # GET/POST operations
-│   │       └── [id]/route.ts    # PUT/DELETE operations
-│   ├── page.tsx                 # Main dashboard interface
-│   ├── layout.tsx               # App layout and metadata
-│   └── globals.css              # Styling
-├── lib/
-│   ├── crypto.ts                # Enhanced dual encryption system
-│   ├── env-storage.ts           # Secure storage management
-│   └── utils.ts                 # Utility functions
-├── data/                        # Encrypted storage (gitignored)
-│   └── env-variables.json       # Double-encrypted variables
-├── setup.js                     # Automated setup script
-└── .env.example                 # Environment template
+├── app/                    # Next.js application
+│   ├── api/                # API endpoints
+│   │   ├── auth/           # Authentication endpoints
+│   │   └── env/            # Environment variables API
+│   ├── page.tsx            # Main dashboard interface
+│   └── layout.tsx          # App layout
+├── lib/                    # Core libraries
+│   ├── crypto.ts           # Encryption system
+│   ├── env-storage.ts      # Environment variables storage
+│   ├── prisma.ts           # Database client
+│   └── utils.ts            # Utility functions
+├── scripts/                # Setup and maintenance scripts
+│   ├── setup.ts            # Initial app setup
+│   ├── setup-db.ts         # Database initialization
+│   └── check-db.ts         # Database connection testing
+├── generated/              # Generated code (Prisma client)
+└── types/                  # Type definitions
+
+prisma/                     # Prisma ORM
+├── schema.prisma           # Database schema
+└── migrations/             # Database migrations
+
+public/                     # Static assets
+data/                       # Local development data storage
 ```
 
 ### 🔄 **Encryption Flow**

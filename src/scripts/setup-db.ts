@@ -1,14 +1,34 @@
-// Complete database setup script with SSL handling
-require('dotenv').config();
-const { Client } = require('pg');
-const { exec } = require('child_process');
-const path = require('path');
-const fs = require('fs');
+// Database setup script with SSL handling
+import dotenv from 'dotenv';
+import { Client } from 'pg';
+import { exec } from 'child_process';
+import path from 'path';
+import fs from 'fs';
+
+// Load environment variables
+dotenv.config();
 
 // Disable certificate validation for this script
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 
-async function setupDatabase() {
+// SQL for creating the environment_variables table
+const CREATE_TABLE_SQL = `
+-- Create the environment_variables table if it doesn't exist
+CREATE TABLE IF NOT EXISTS "environment_variables" (
+    "id" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "encrypted_value" TEXT NOT NULL,
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "environment_variables_pkey" PRIMARY KEY ("id")
+);
+
+-- Create unique index on name if it doesn't exist
+CREATE UNIQUE INDEX IF NOT EXISTS "environment_variables_name_key" ON "environment_variables"("name");
+`;
+
+async function setupDatabase(): Promise<void> {
   console.log('📦 Setting up EnvX database...');
   
   if (!process.env.DATABASE_URL) {
@@ -38,13 +58,13 @@ async function setupDatabase() {
     console.log('   1. Start your application: npm run dev');
     console.log('   2. Access it in your browser at: http://localhost:3000');
   } catch (err) {
-    console.error('\n❌ Setup failed:', err.message);
+    console.error('\n❌ Setup failed:', err instanceof Error ? err.message : String(err));
     process.exit(1);
   }
 }
 
 // Test database connection
-async function testConnection() {
+async function testConnection(): Promise<boolean> {
   const client = new Client({
     connectionString: process.env.DATABASE_URL,
     ssl: { 
@@ -59,13 +79,13 @@ async function testConnection() {
     await client.end();
     return true;
   } catch (err) {
-    console.error('❌ Database connection error:', err.message);
-    throw new Error(`Failed to connect to database: ${err.message}`);
+    console.error('❌ Database connection error:', err instanceof Error ? err.message : String(err));
+    throw new Error(`Failed to connect to database: ${err instanceof Error ? err.message : String(err)}`);
   }
 }
 
 // Create necessary database tables
-async function createTables() {
+async function createTables(): Promise<boolean> {
   const client = new Client({
     connectionString: process.env.DATABASE_URL,
     ssl: { 
@@ -76,11 +96,8 @@ async function createTables() {
   try {
     await client.connect();
     
-    // Read SQL script
-    const sqlPath = path.join(__dirname, 'create-tables.sql');
-    const sql = fs.readFileSync(sqlPath, 'utf8');
-    
-    await client.query(sql);
+    // Execute SQL to create tables
+    await client.query(CREATE_TABLE_SQL);
     
     // Verify table exists
     const checkResult = await client.query(`
@@ -100,13 +117,13 @@ async function createTables() {
     await client.end();
     return true;
   } catch (err) {
-    console.error('❌ Error creating tables:', err.message);
-    throw new Error(`Failed to create database tables: ${err.message}`);
+    console.error('❌ Error creating tables:', err instanceof Error ? err.message : String(err));
+    throw new Error(`Failed to create database tables: ${err instanceof Error ? err.message : String(err)}`);
   }
 }
 
 // Generate Prisma client
-async function generatePrismaClient() {
+async function generatePrismaClient(): Promise<boolean> {
   return new Promise((resolve, reject) => {
     exec('npx prisma generate', (error, stdout, stderr) => {
       if (error) {
@@ -121,4 +138,7 @@ async function generatePrismaClient() {
   });
 }
 
-setupDatabase().catch(console.error); 
+setupDatabase().catch(err => {
+  console.error('Unhandled error:', err);
+  process.exit(1);
+}); 

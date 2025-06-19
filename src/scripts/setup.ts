@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 
-const crypto = require('crypto');
-const fs = require('fs');
-const path = require('path');
-const readline = require('readline');
+import crypto from 'crypto';
+import fs from 'fs';
+import path from 'path';
+import readline from 'readline';
 
 const rl = readline.createInterface({
   input: process.stdin,
@@ -13,11 +13,11 @@ const rl = readline.createInterface({
 console.log('🔐 Environment Variables Manager (EnvX) Setup');
 console.log('===============================================\n');
 
-function generateSecureKey() {
+function generateSecureKey(): string {
   return crypto.randomBytes(32).toString('hex');
 }
 
-function promptForPassword() {
+function promptForPassword(): Promise<string> {
   return new Promise((resolve) => {
     rl.question('Enter a secure admin password (or press Enter to generate one): ', (password) => {
       if (password.trim() === '') {
@@ -31,7 +31,7 @@ function promptForPassword() {
   });
 }
 
-async function setup() {
+async function setup(): Promise<void> {
   try {
     // Check if .env.local already exists
     const envPath = path.join(process.cwd(), '.env.local');
@@ -61,6 +61,9 @@ ADMIN_PASSWORD=${adminPassword}
 # CRITICAL: Keep this key secure and backed up!
 # If you lose this key, all encrypted environment variables cannot be decrypted
 MASTER_ENCRYPTION_KEY=${masterKey}
+
+# Database connection string for PostgreSQL (setup separately)
+# DATABASE_URL=postgresql://username:password@hostname:port/database?sslmode=require
 `;
 
     // Write .env.local file
@@ -76,9 +79,11 @@ MASTER_ENCRYPTION_KEY=${masterKey}
 
     console.log('\n🎉 Setup completed successfully!');
     console.log('\n📋 Next steps:');
-    console.log('1. Run: npm run dev (or yarn dev / bun dev)');
-    console.log('2. Open: http://localhost:3000');
-    console.log(`3. Login with password: ${adminPassword}`);
+    console.log('1. Set up your PostgreSQL database and update DATABASE_URL in .env.local');
+    console.log('2. Run: npm run db:setup');
+    console.log('3. Run: npm run dev (or yarn dev / bun dev)');
+    console.log('4. Open: http://localhost:3000');
+    console.log(`5. Login with password: ${adminPassword}`);
     console.log('\n⚠️  IMPORTANT:');
     console.log('- Keep your .env.local file secure');
     console.log('- Backup your master encryption key');
@@ -88,7 +93,7 @@ MASTER_ENCRYPTION_KEY=${masterKey}
     console.log('\n   Store this key securely - you cannot recover encrypted data without it!');
 
   } catch (error) {
-    console.error('❌ Setup failed:', error.message);
+    console.error('❌ Setup failed:', error instanceof Error ? error.message : String(error));
     process.exit(1);
   } finally {
     rl.close();
@@ -96,4 +101,7 @@ MASTER_ENCRYPTION_KEY=${masterKey}
 }
 
 // Run setup
-setup(); 
+setup().catch(error => {
+  console.error('Unhandled error:', error);
+  process.exit(1);
+}); 

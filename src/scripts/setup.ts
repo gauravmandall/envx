@@ -4,6 +4,8 @@ import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import readline from 'readline';
+import { PrismaClient } from '@prisma/client';
+import { saveAdminCredentials } from '../lib/auth';
 
 const rl = readline.createInterface({
   input: process.stdin,
@@ -29,6 +31,24 @@ function promptForPassword(): Promise<string> {
       }
     });
   });
+}
+
+async function setupDatabase(adminPassword: string) {
+  console.log('\n🔄 Setting up database...');
+  
+  try {
+    // Initialize Prisma client
+    const prisma = new PrismaClient();
+    
+    // Store admin credentials in database
+    await saveAdminCredentials(adminPassword);
+    console.log('✅ Admin credentials stored in database');
+    
+    await prisma.$disconnect();
+  } catch (error) {
+    console.error('❌ Failed to set up database:', error instanceof Error ? error.message : String(error));
+    console.log('   Admin credentials will only be stored in .env.local file.');
+  }
 }
 
 async function setup(): Promise<void> {
@@ -75,6 +95,14 @@ MASTER_ENCRYPTION_KEY=${masterKey}
     if (!fs.existsSync(dataDir)) {
       fs.mkdirSync(dataDir, { recursive: true });
       console.log('✅ Created data directory');
+    }
+    
+    // If DATABASE_URL is provided, set up the database
+    if (process.env.DATABASE_URL) {
+      await setupDatabase(adminPassword);
+    } else {
+      console.log('\n⚠️ No DATABASE_URL found in environment variables.');
+      console.log('   Set DATABASE_URL in .env.local to enable persistent storage.');
     }
 
     console.log('\n🎉 Setup completed successfully!');

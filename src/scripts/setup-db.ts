@@ -26,6 +26,17 @@ CREATE TABLE IF NOT EXISTS "environment_variables" (
 
 -- Create unique index on name if it doesn't exist
 CREATE UNIQUE INDEX IF NOT EXISTS "environment_variables_name_key" ON "environment_variables"("name");
+
+-- Create the admin_credentials table if it doesn't exist
+CREATE TABLE IF NOT EXISTS "admin_credentials" (
+    "id" TEXT NOT NULL DEFAULT 'admin',
+    "hashed_password" TEXT NOT NULL,
+    "salt" TEXT NOT NULL,
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "admin_credentials_pkey" PRIMARY KEY ("id")
+);
 `;
 
 async function setupDatabase(): Promise<void> {

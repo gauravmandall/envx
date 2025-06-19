@@ -7,11 +7,14 @@
 ![Encryption](https://img.shields.io/badge/Encryption-Double%20Layer-green?style=for-the-badge&logo=lock&logoColor=white)
 
 **The most secure, open-source environment variables management system**  
-*Built with enterprise-grade security, double encryption, and merkle tree-inspired layering*
+*Built with enterprise-grade security, double encryption, and PostgreSQL database storage*
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fgauravmandall%2Fenvx&env=DATABASE_URL%2CADMIN_PASSWORD%2CMASTER_ENCRYPTION_KEY)
 
 [![MIT License](https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square)](https://choosealicense.com/licenses/mit/)
 [![Next.js](https://img.shields.io/badge/Next.js-15.3.3-black?style=flat-square&logo=next.js)](https://nextjs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue?style=flat-square&logo=typescript)](https://www.typescriptlang.org/)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Database-blue?style=flat-square&logo=postgresql)](https://www.postgresql.org/)
 [![Security](https://img.shields.io/badge/Security-AES%20256%20+%20ChaCha20-red?style=flat-square&logo=security)](https://en.wikipedia.org/wiki/Advanced_Encryption_Standard)
 
 ---
@@ -31,6 +34,15 @@
 </td>
 </tr>
 </table>
+
+
+### ❤️ Support This Project
+
+<div align="center">
+<a href="https://grvx.dev/support" target="_blank">
+<img src="https://img.shields.io/badge/Support-Donate-ff69b4?style=for-the-badge&logo=heart" alt="Support">
+</a>
+</div>
 
 ---
 
@@ -75,7 +87,7 @@ Perfect for developers who want Vercel-like environment variable management with
 
 <div align="center">
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fgauravmandall%2Fenvx&env=ADMIN_PASSWORD%2CMASTER_ENCRYPTION_KEY)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fgauravmandall%2Fenvx&env=DATABASE_URL%2CADMIN_PASSWORD%2CMASTER_ENCRYPTION_KEY)
 
 *Deploy to Vercel in seconds with pre-configured environment variables*
 
@@ -326,6 +338,56 @@ npm run lint
 npm run build
 ```
 
+## 🔌 Database Setup with PostgreSQL
+
+EnvX uses PostgreSQL for persistent storage of your environment variables across deployments and devices.
+
+### 1. Set Up a PostgreSQL Database
+
+You'll need a PostgreSQL database. Options include:
+
+1. **Vercel Postgres**: Built-in option if deploying on Vercel
+2. **Supabase**: Offers a generous free tier PostgreSQL database
+3. **Neon.tech**: Serverless PostgreSQL with a free tier
+4. **Railway.app**: Easy to deploy PostgreSQL database
+5. **Any PostgreSQL**: Self-hosted or other cloud provider
+
+### 2. Configure Your Environment Variables
+
+Create a `.env` file with your database connection:
+
+```bash
+# PostgreSQL Connection String
+DATABASE_URL="postgresql://username:password@hostname:port/database?sslmode=require"
+
+# Security
+ADMIN_PASSWORD=your_secure_admin_password
+MASTER_ENCRYPTION_KEY=your_secure_encryption_key
+```
+
+For cloud databases (Supabase, Neon, etc.), make sure to add `?sslmode=require` to the connection string.
+
+### 3. Run the Database Setup Script
+
+Our setup script handles SSL certificate issues automatically:
+
+```bash
+# Run the setup script
+npm run db:setup
+```
+
+This creates all the necessary database tables and generates the Prisma client.
+
+### 4. Deploy to Vercel
+
+When deploying to Vercel:
+
+1. Add the same environment variables in Vercel project settings
+2. Vercel will automatically run the setup script during build
+
+Your environment variables are now securely stored in PostgreSQL and will persist across deployments, server restarts, and different devices!
+
+
 ## 📄 License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
@@ -465,22 +527,8 @@ I'm actively looking for contributors to help build these amazing features! If y
 ### 💬 **Get Help**
 - **GitHub Issues**: [Report bugs and request features](https://github.com/gauravmandall/envx/issues)
 - **Discussions**: [Join community discussions](https://github.com/gauravmandall/envx/discussions) 
-- **Documentation**: [Comprehensive guides and tutorials](https://github.com/gauravmandall/envx/wiki)
-- **Security Issues**: Email hi@yoursite.com for responsible disclosure
-
-### 🌟 **Follow Me for More Projects!**
-
-<div align="center">
-
-**I build open-source security tools and share development insights!**
-
-[![GitHub](https://img.shields.io/badge/GitHub-Follow%20@gauravmandall-black?style=for-the-badge&logo=github&logoColor=white)](https://github.com/gauravmandall)
-[![X (Twitter)](https://img.shields.io/badge/X-Follow%20@gauravmandall-1DA1F2?style=for-the-badge&logo=x&logoColor=white)](https://x.com/intent/follow?screen_name=gauravmandall)
-[![LinkedIn](https://img.shields.io/badge/LinkedIn-Connect-0077B5?style=for-the-badge&logo=linkedin&logoColor=white)](https://linkedin.com/in/gauravmandall)
-
-**⭐ Star this repo if you found it helpful!**
-
-</div>
+- **Documentation**: [Comprehensive guides and tutorials](https://github.com/gauravmandall/envx/Readme.md)
+- **Security Issues**: Email [envxbugs@grvx.dev](mailto:envxbugs@grvx.dev) for responsible disclosure
 
 ### 🤝 **Contributing**
 
@@ -499,72 +547,45 @@ We welcome contributions from the community! Here's how you can help:
 - **Security**: This software comes with no warranty. Use at your own risk.
 - **Compliance**: Suitable for SOC2, GDPR, HIPAA environments with proper configuration
 
-### 🙏 **Acknowledgments**
+###  **Acknowledgments**
 
 - **Inspiration**: Vercel's environment variable management
 - **Security**: NSA's Suite B cryptographic algorithms
 - **Community**: All contributors and users who made this possible
 - **Dependencies**: Next.js, React, TypeScript, and the open-source community
 
+### 🙏 **Support the Project**
+
+If you find this project useful, please consider supporting it by:
+
+- **⭐ Star the repository**: It helps make the project more visible
+- **🔄 Share it with others**: Spread the word about EnvX
+- **💰 Make a donation**: [Buy me a Mac](https://grvx.dev/support)
+- **🐛 Report issues**: Help improve the project by reporting bugs
+- **💡 Suggest features**: Share your ideas for making EnvX even better
+- **👨‍💻 Contribute code**: Submit pull requests to improve the codebase
+
+Your support helps maintain and improve this project. Thank you for your contribution!
+
 ---
 
 <div align="center">
 
+**I build open-source security tools and share development insights!**
+
+[![GitHub](https://img.shields.io/badge/GitHub-Follow%20@gauravmandall-black?style=for-the-badge&logo=github&logoColor=white)](https://github.com/gauravmandall)
+[![X (Twitter)](https://img.shields.io/badge/X-Follow%20@gauravmandall-1DA1F2?style=for-the-badge&logo=x&logoColor=white)](https://x.com/intent/follow?screen_name=gauravmandall)
+[![LinkedIn](https://img.shields.io/badge/LinkedIn-Connect-0077B5?style=for-the-badge&logo=linkedin&logoColor=white)](https://linkedin.com/in/gauravmandall)
+
+**⭐ Star this repo if you found it helpful!**
+
+
 **Built with ❤️ for the developer community**
 
-*Making enterprise-grade security accessible to everyone*
+*Making environment variable management simplify to everyone*
 
 [![MIT License](https://img.shields.io/badge/License-MIT-yellow.svg)](https://choosealicense.com/licenses/mit/)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](http://makeapullrequest.com)
 [![Maintenance](https://img.shields.io/badge/Maintained-yes-green.svg)](https://github.com/gauravmandall/envx/graphs/commit-activity)
 
 </div>
-
-## 🔌 Database Setup with PostgreSQL
-
-EnvX uses PostgreSQL for persistent storage of your environment variables across deployments and devices.
-
-### 1. Set Up a PostgreSQL Database
-
-You'll need a PostgreSQL database. Options include:
-
-1. **Vercel Postgres**: Built-in option if deploying on Vercel
-2. **Supabase**: Offers a generous free tier PostgreSQL database
-3. **Neon.tech**: Serverless PostgreSQL with a free tier
-4. **Railway.app**: Easy to deploy PostgreSQL database
-5. **Any PostgreSQL**: Self-hosted or other cloud provider
-
-### 2. Configure Your Environment Variables
-
-Create a `.env` file with your database connection:
-
-```bash
-# PostgreSQL Connection String
-DATABASE_URL="postgresql://username:password@hostname:port/database?sslmode=require"
-
-# Security
-ADMIN_PASSWORD=your_secure_admin_password
-MASTER_ENCRYPTION_KEY=your_secure_encryption_key
-```
-
-For cloud databases (Supabase, Neon, etc.), make sure to add `?sslmode=require` to the connection string.
-
-### 3. Run the Database Setup Script
-
-Our setup script handles SSL certificate issues automatically:
-
-```bash
-# Run the setup script
-npm run db:setup
-```
-
-This creates all the necessary database tables and generates the Prisma client.
-
-### 4. Deploy to Vercel
-
-When deploying to Vercel:
-
-1. Add the same environment variables in Vercel project settings
-2. Vercel will automatically run the setup script during build
-
-Your environment variables are now securely stored in PostgreSQL and will persist across deployments, server restarts, and different devices!

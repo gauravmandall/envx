@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { writeFileSync, readFileSync } from 'fs'
 import { join } from 'path'
+import { verifyAdminPassword, saveAdminCredentials } from '@/lib/auth'
 
 export async function POST(request: NextRequest) {
   try {
@@ -21,38 +22,48 @@ export async function POST(request: NextRequest) {
     }
 
     // Verify current password
-    const currentEnvPassword = process.env.ADMIN_PASSWORD || 'secure123'
+    const isValidPassword = await verifyAdminPassword(currentPassword)
     
-    if (currentPassword !== currentEnvPassword) {
+    if (!isValidPassword) {
       return NextResponse.json(
         { success: false, message: 'Current password is incorrect' },
         { status: 401 }
       )
     }
 
-    // Update the .env.local file
-    const envPath = join(process.cwd(), '.env.local')
-    let envContent = ''
+    // Save new password to database
+    await saveAdminCredentials(newPassword)
     
+    // Also update the .env.local file to keep it in sync
+    // This is for development environments that don't use database
     try {
-      envContent = readFileSync(envPath, 'utf8')
+      const envPath = join(process.cwd(), '.env.local')
+      let envContent = ''
+      
+      try {
+        envContent = readFileSync(envPath, 'utf8')
+      } catch (error) {
+        // File doesn't exist, create new content
+        envContent = ''
+      }
+      
+      // Update or add ADMIN_PASSWORD
+      const lines = envContent.split('\n')
+      const adminPasswordIndex = lines.findIndex(line => line.startsWith('ADMIN_PASSWORD='))
+      
+      if (adminPasswordIndex !== -1) {
+        lines[adminPasswordIndex] = `ADMIN_PASSWORD=${newPassword}`
+      } else {
+        lines.push(`ADMIN_PASSWORD=${newPassword}`)
+      }
+      
+      // Write back to file
+      writeFileSync(envPath, lines.join('\n'))
     } catch (error) {
-      // File doesn't exist, create new content
-      envContent = ''
+      console.error('Error updating .env.local file:', error)
+      // This is not a critical error, we still consider the password change successful
+      // as it's stored in the database
     }
-    
-    // Update or add ADMIN_PASSWORD
-    const lines = envContent.split('\n')
-    const adminPasswordIndex = lines.findIndex(line => line.startsWith('ADMIN_PASSWORD='))
-    
-    if (adminPasswordIndex !== -1) {
-      lines[adminPasswordIndex] = `ADMIN_PASSWORD=${newPassword}`
-    } else {
-      lines.push(`ADMIN_PASSWORD=${newPassword}`)
-    }
-    
-    // Write back to file
-    writeFileSync(envPath, lines.join('\n'))
     
     return NextResponse.json(
       { success: true, message: 'Password updated successfully' },

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { verifyAdminPassword } from '@/lib/auth'
 
 export async function POST(request: NextRequest) {
   try {
@@ -11,11 +12,8 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Get the password from environment variables
-    const envPassword = process.env.ADMIN_PASSWORD || 'secure123'
-    
-    // Simple string comparison for now (you might want to use hashed passwords in production)
-    const isValid = password === envPassword
+    // Verify password using our new auth system
+    const isValid = await verifyAdminPassword(password)
     
     if (isValid) {
       return NextResponse.json(

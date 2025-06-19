@@ -24,3 +24,13 @@ model EnvironmentVariable {
 
   @@map("environment_variables")
 }
+
+model AdminCredential {
+  id            String   @id @default("admin")  // fixed ID for singleton
+  hashedPassword String   @map("hashed_password")
+  salt          String
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@map("admin_credentials")
+}

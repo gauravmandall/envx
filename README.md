@@ -517,7 +517,7 @@ Add these variables to your `.env.local` file:
 ```bash
 # Supabase Configuration
 NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
-SUPABASE_SERVICE_KEY=your_service_role_key
+SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
 ```
 
 For Vercel deployments, add these same environment variables in the Vercel project settings.

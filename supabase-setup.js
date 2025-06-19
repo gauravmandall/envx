@@ -6,11 +6,11 @@ require('dotenv').config();
 
 // Initialize Supabase client
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_SERVICE_KEY;
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 if (!supabaseUrl || !supabaseKey) {
   console.error('ERROR: Missing Supabase credentials in environment variables.');
-  console.error('Please create a .env.local file with NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_KEY');
+  console.error('Please create a .env.local file with NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY');
   process.exit(1);
 }
 
@@ -82,7 +82,7 @@ async function setupSupabase() {
     console.log('\n===== IMPORTANT =====');
     console.log('Make sure your .env.local file contains:');
     console.log('1. NEXT_PUBLIC_SUPABASE_URL=your_supabase_url');
-    console.log('2. SUPABASE_SERVICE_KEY=your_supabase_service_key');
+    console.log('2. SUPABASE_SERVICE_ROLE_KEY=your_SUPABASE_SERVICE_ROLE_KEY');
     console.log('3. MASTER_ENCRYPTION_KEY=your_secure_encryption_key');
     console.log('=====================');
     

@@ -12,7 +12,7 @@ function isAuthenticated(request: NextRequest): boolean {
 // GET /api/env/[id] - Get single environment variable
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     if (!isAuthenticated(request)) {
@@ -22,7 +22,8 @@ export async function GET(
       )
     }
 
-    const envVar = getEnvVarById(params.id)
+    const { id } = await params
+    const envVar = getEnvVarById(id)
     
     if (!envVar) {
       return NextResponse.json(
@@ -54,7 +55,7 @@ export async function GET(
 // PUT /api/env/[id] - Update environment variable
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     if (!isAuthenticated(request)) {
@@ -64,6 +65,7 @@ export async function PUT(
       )
     }
 
+    const { id } = await params
     const { name, value } = await request.json()
     
     if (!name || !value) {
@@ -81,7 +83,7 @@ export async function PUT(
       )
     }
 
-    const updatedEnvVar = updateEnvVar(params.id, name, value)
+    const updatedEnvVar = updateEnvVar(id, name, value)
     
     return NextResponse.json({
       success: true,
@@ -123,7 +125,7 @@ export async function PUT(
 // DELETE /api/env/[id] - Delete environment variable
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     if (!isAuthenticated(request)) {
@@ -133,7 +135,8 @@ export async function DELETE(
       )
     }
 
-    const deleted = deleteEnvVar(params.id)
+    const { id } = await params
+    const deleted = deleteEnvVar(id)
     
     if (!deleted) {
       return NextResponse.json(

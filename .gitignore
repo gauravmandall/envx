@@ -111,3 +111,5 @@ jspm_packages/
 
 # ternjs port file
 .tern-port
+
+/src/generated/prisma

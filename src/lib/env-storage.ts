@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs'
 import { join } from 'path'
 import { encrypt, decrypt } from './crypto'
-import { supabase, ENV_VARS_TABLE, DbEnvVariable } from './supabase'
+import { prisma } from './prisma'
 
 export interface StoredEnvVariable {
   id: string
@@ -43,79 +43,33 @@ function ensureDataDirectory() {
       mkdirSync(dataDir, { recursive: true })
     } catch (error) {
       console.error('Failed to create data directory, but continuing anyway:', error);
-      // Don't throw error - we'll use Supabase for storage instead
+      // Don't throw error - we'll use database for storage instead
     }
   }
 }
 
-// Read encrypted environment variables from Supabase, with fallback to file storage
-async function readStoredEnvVarsFromSupabase(): Promise<StoredEnvVariable[]> {
+// Read encrypted environment variables from Prisma database
+async function readStoredEnvVarsFromDb(): Promise<StoredEnvVariable[]> {
   try {
-    // Try to get from Supabase
-    const { data, error } = await supabase
-      .from(ENV_VARS_TABLE)
-      .select('*');
-    
-    if (error) {
-      console.error('Error fetching from Supabase:', error);
-      
-      // If the table doesn't exist, try to create it
-      if (error.code === '42P01') { // PostgreSQL error code for "relation does not exist"
-        console.log('Table does not exist, attempting to create it...');
-        
-        try {
-          // Create a dummy record to initialize the table
-          const dummyRecord = {
-            id: 'init_' + Date.now().toString(),
-            name: 'INIT_VAR',
-            encrypted_value: 'init_value',
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          };
-          
-          const { error: createError } = await supabase
-            .from(ENV_VARS_TABLE)
-            .insert(dummyRecord);
-            
-          if (createError) {
-            console.error('Failed to create table:', createError);
-          } else {
-            console.log('Successfully created table and inserted dummy record');
-            
-            // Delete the dummy record
-            await supabase
-              .from(ENV_VARS_TABLE)
-              .delete()
-              .eq('id', dummyRecord.id);
-              
-            // Return empty array as the table was just created
-            return [];
-          }
-        } catch (initError) {
-          console.error('Error initializing table:', initError);
-        }
-      }
-      
-      // Fall back to file storage if Supabase fails
-      return readStoredEnvVarsFromFile();
-    }
+    // Try to get from Prisma
+    const envVars = await prisma.environmentVariable.findMany();
     
     // Transform from DB format to StoredEnvVariable format
-    return data.map((item: DbEnvVariable): StoredEnvVariable => ({
+    return envVars.map((item: { id: any; name: any; encryptedValue: any; createdAt: { toISOString: () => any }; updatedAt: { toISOString: () => any } }) => ({
       id: item.id,
       name: item.name,
-      encryptedValue: item.encrypted_value,
-      createdAt: item.created_at,
-      updatedAt: item.updated_at
+      encryptedValue: item.encryptedValue,
+      createdAt: item.createdAt.toISOString(),
+      updatedAt: item.updatedAt.toISOString()
     }));
   } catch (error) {
-    console.error('Error in Supabase read operation:', error);
+    console.error('Error in Prisma read operation:', error);
     // Fall back to file storage
     return readStoredEnvVarsFromFile();
   }
 }
 
-// Read from file (fallback for development or if Supabase fails)
+// Read from file (fallback for development or if database fails)
 function readStoredEnvVarsFromFile(): StoredEnvVariable[] {
   // Don't attempt to read from filesystem in serverless environments
   if (process.env.VERCEL) {
@@ -138,44 +92,33 @@ function readStoredEnvVarsFromFile(): StoredEnvVariable[] {
   }
 }
 
-// Write to Supabase, with fallback to file
-async function writeStoredEnvVarsToSupabase(envVars: StoredEnvVariable[]): Promise<boolean> {
+// Write to Prisma database
+async function writeStoredEnvVarsToDb(envVars: StoredEnvVariable[]): Promise<boolean> {
   try {
     // First, delete all existing records
-    const { error: deleteError } = await supabase
-      .from(ENV_VARS_TABLE)
-      .delete()
-      .neq('id', '0'); // Delete all rows
+    await prisma.environmentVariable.deleteMany({});
     
-    if (deleteError) {
-      console.error('Error deleting from Supabase:', deleteError);
-      return writeStoredEnvVarsToFile(envVars);
-    }
-    
-    // Then insert all new records
-    const dbRecords = envVars.map(v => ({
-      id: v.id,
-      name: v.name,
-      encrypted_value: v.encryptedValue,
-      created_at: v.createdAt,
-      updated_at: v.updatedAt
-    }));
-    
-    const { error: insertError } = await supabase
-      .from(ENV_VARS_TABLE)
-      .insert(dbRecords);
-      
-    if (insertError) {
-      console.error('Error inserting to Supabase:', insertError);
-      return writeStoredEnvVarsToFile(envVars);
-    }
+    // Then create all new records
+    await prisma.$transaction(
+      envVars.map(v => 
+        prisma.environmentVariable.create({
+          data: {
+            id: v.id,
+            name: v.name,
+            encryptedValue: v.encryptedValue,
+            createdAt: new Date(v.createdAt),
+            updatedAt: new Date(v.updatedAt)
+          }
+        })
+      )
+    );
     
     // Update cache
     envVarsCache = [...envVars];
     return true;
   } catch (error) {
-    console.error('Error in Supabase write operation:', error);
-    // Fall back to file storage
+    console.error('Error in Prisma write operation:', error);
+    // Fall back to file storage if database fails
     return writeStoredEnvVarsToFile(envVars);
   }
 }
@@ -206,14 +149,14 @@ async function readStoredEnvVars(): Promise<StoredEnvVariable[]> {
     return [...envVarsCache]; // Return a copy to prevent accidental mutations
   }
   
-  const envVars = await readStoredEnvVarsFromSupabase();
+  const envVars = await readStoredEnvVarsFromDb();
   envVarsCache = [...envVars];
   return envVars;
 }
 
 // Write encrypted environment variables to storage
 async function writeStoredEnvVars(envVars: StoredEnvVariable[]): Promise<boolean> {
-  const success = await writeStoredEnvVarsToSupabase(envVars);
+  const success = await writeStoredEnvVarsToDb(envVars);
   return success;
 }
 

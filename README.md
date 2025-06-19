@@ -515,36 +515,59 @@ We welcome contributions from the community! Here's how you can help:
 
 </div>
 
-## 🔌 Database Storage (Supabase Setup)
+## 🔌 Database Storage with Prisma
 
-EnvX now supports persistent storage with Supabase for keeping your environment variables safe across deployments and device logins.
+EnvX now uses Prisma ORM with PostgreSQL for reliable, persistent storage of your environment variables across deployments and devices.
 
-### 1. Create a Supabase Account and Project
+### 1. Set Up a PostgreSQL Database
 
-1. Go to [Supabase.com](https://supabase.com/) and create an account
-2. Create a new project
-3. Once your project is created, navigate to **Project Settings** > **API**
-4. Copy your **Project URL** and **service_role key** (NOT the anon public key)
+You'll need a PostgreSQL database. Options include:
 
-### 2. Set Up Environment Variables
+1. **Vercel Postgres**: Built-in option if deploying on Vercel
+2. **Supabase**: Offers a generous free tier PostgreSQL database
+3. **Neon.tech**: Serverless PostgreSQL with a free tier
+4. **Railway.app**: Easy to deploy PostgreSQL database
+5. **Any PostgreSQL**: Self-hosted or other cloud provider
 
-Add these variables to your `.env.local` file:
+Get your database connection string in this format:
+```
+postgresql://username:password@hostname:port/database
+```
+
+### 2. Configure Your Environment Variables
+
+Add this to your `.env.local` file:
 
 ```bash
-# Supabase Configuration
-NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
-SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
+# PostgreSQL Connection String
+DATABASE_URL=postgresql://username:password@hostname:port/database
+
+# Security
+ADMIN_PASSWORD=your_secure_admin_password
+MASTER_ENCRYPTION_KEY=your_secure_encryption_key
 ```
 
 For Vercel deployments, add these same environment variables in the Vercel project settings.
 
 ### 3. Run the Setup Script
 
-This script will initialize your Supabase database with the required table:
+This will set up your database with the required tables:
 
 ```bash
-npm install dotenv
-node supabase-setup.js
+# Install Prisma dependencies
+npm install prisma @prisma/client
+
+# Run the setup script
+node prisma-setup.js
 ```
 
-Now your environment variables will persist across deployments, server restarts, and device changes!
+### 4. Initialize Database After Deployment
+
+After deploying to Vercel, you need to initialize the database connection:
+
+```bash
+curl -X GET https://your-app-url.vercel.app/api/setup \
+  -H "Authorization: Bearer your_admin_password"
+```
+
+Replace `your-app-url.vercel.app` with your deployed URL and `your_admin_password` with your ADMIN_PASSWORD value.

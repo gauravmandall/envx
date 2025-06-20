@@ -36,6 +36,7 @@ export default function EnvDashboard() {
     name: "",
     value: ""
   })
+  const [rateLimitTimeRemaining, setRateLimitTimeRemaining] = useState("");
 
   // API functions for environment variables
   const getAuthHeaders = () => ({
@@ -166,14 +167,105 @@ export default function EnvDashboard() {
 
   // Rate limiting
   useEffect(() => {
-    if (failedAttempts >= 3) {
-      setIsRateLimited(true)
-      setTimeout(() => {
-        setIsRateLimited(false)
-        setFailedAttempts(0)
-      }, 60000) // 1 minute lockout
+    // Check if there's an existing rate limit in localStorage
+    const storedLimitData = localStorage.getItem('envx_rate_limit');
+    
+    // For debugging - log the localStorage contents
+    console.log('Rate limit data in storage:', storedLimitData);
+    
+    if (storedLimitData) {
+      try {
+        const limitData = JSON.parse(storedLimitData);
+        const now = Date.now();
+        
+        // Log the parsed rate limiting data
+        console.log('Parsed rate limit data:', limitData);
+        console.log('Current time:', now);
+        console.log('Rate limit expires at:', limitData.expiresAt);
+        console.log('Time remaining (ms):', limitData.expiresAt - now);
+        
+        // If the stored limit is still active
+        if (now < limitData.expiresAt) {
+          console.log('Rate limit is active, applying limitations');
+          setIsRateLimited(true);
+          setFailedAttempts(limitData.attempts);
+          
+          // Set a timer to remove the rate limit when it expires
+          const timeoutId = setTimeout(() => {
+            console.log('Rate limit expired, removing limitations');
+            setIsRateLimited(false);
+            setFailedAttempts(0);
+            localStorage.removeItem('envx_rate_limit');
+          }, limitData.expiresAt - now);
+          
+          return () => clearTimeout(timeoutId);
+        } else {
+          // Clear expired rate limit
+          console.log('Rate limit has already expired, removing it from storage');
+          localStorage.removeItem('envx_rate_limit');
+        }
+      } catch (error) {
+        console.error('Error parsing rate limit data:', error);
+        localStorage.removeItem('envx_rate_limit');
+      }
+    } else {
+      console.log('No rate limit data found in storage');
     }
-  }, [failedAttempts])
+  }, []);
+
+  // Progressive rate limiting logic
+  useEffect(() => {
+    if (failedAttempts >= 3) {
+      // Calculate timeout duration based on consecutive failures
+      // 3 failures = 3 minutes, 6 failures = 5 minutes, 9 failures = 10 minutes, 12+ failures = 30 minutes
+      let timeoutMinutes = 3;
+      
+      if (failedAttempts >= 12) {
+        timeoutMinutes = 30;
+      } else if (failedAttempts >= 9) {
+        timeoutMinutes = 10;
+      } else if (failedAttempts >= 6) {
+        timeoutMinutes = 5;
+      }
+      
+      const timeoutMs = timeoutMinutes * 60 * 1000;
+      const expiresAt = Date.now() + timeoutMs;
+      
+      // Store rate limit data in localStorage
+      localStorage.setItem('envx_rate_limit', JSON.stringify({
+        attempts: failedAttempts,
+        expiresAt: expiresAt
+      }));
+      
+      setIsRateLimited(true);
+      
+      // Set timeout to remove rate limiting
+      const timeoutId = setTimeout(() => {
+        setIsRateLimited(false);
+        setFailedAttempts(0);
+        localStorage.removeItem('envx_rate_limit');
+      }, timeoutMs);
+      
+      return () => clearTimeout(timeoutId);
+    }
+  }, [failedAttempts]);
+  
+  // Function to get rate limit remaining time in minutes and seconds
+  const getRateLimitTimeRemaining = (): string => {
+    try {
+      const storedLimitData = localStorage.getItem('envx_rate_limit');
+      if (!storedLimitData) return '';
+      
+      const limitData = JSON.parse(storedLimitData);
+      const remainingMs = Math.max(0, limitData.expiresAt - Date.now());
+      const minutes = Math.floor(remainingMs / 60000);
+      const seconds = Math.floor((remainingMs % 60000) / 1000);
+      
+      return `${minutes}m ${seconds}s`;
+    } catch (error) {
+      return '';
+    }
+  }
 
   const showNotification = (type: "success" | "error", message: string) => {
     setNotification({ type, message })
@@ -182,7 +274,8 @@ export default function EnvDashboard() {
 
   const handleLogin = async () => {
     if (isRateLimited) {
-      setError("Too many failed attempts. Please wait 1 minute.")
+      const remainingTime = getRateLimitTimeRemaining();
+      setError(`Too many failed attempts. Please wait ${remainingTime || "until timeout expires"}.`)
       return
     }
 
@@ -190,6 +283,8 @@ export default function EnvDashboard() {
     setError("")
 
     try {
+      console.log("Attempting login with password:", password.replace(/./g, '*'))
+      
       const response = await fetch("/api/auth/login", {
         method: "POST",
         headers: {
@@ -198,7 +293,9 @@ export default function EnvDashboard() {
         body: JSON.stringify({ password }),
       })
 
+      console.log("Login response status:", response.status)
       const data = await response.json()
+      console.log("Login response data:", data)
 
       if (data.success) {
         setIsAuthenticated(true)
@@ -208,7 +305,8 @@ export default function EnvDashboard() {
         await fetchEnvVars()
       } else {
         setFailedAttempts((prev) => prev + 1)
-        setError(`Invalid password. ${3 - failedAttempts - 1} attempts remaining.`)
+        console.log("Failed attempts increased to:", failedAttempts + 1)
+        setError(`Invalid password. ${Math.max(0, 3 - failedAttempts - 1)} attempts remaining before timeout.`)
       }
     } catch (error) {
       console.error("Login error:", error)
@@ -385,10 +483,22 @@ export default function EnvDashboard() {
 
   const copyToClipboard = async (text: string, varName?: string) => {
     try {
-      await navigator.clipboard.writeText(text)
-      showNotification("success", varName ? `Copied ${varName}` : "Copied to clipboard")
+      // If varName is provided, we're copying a single variable
+      // In this case, format it as KEY=VALUE like in multi-select
+      if (varName) {
+        const envVar = envVars.find(env => env.name === varName);
+        if (envVar) {
+          await navigator.clipboard.writeText(`${envVar.name}=${envVar.value}`);
+          showNotification("success", `Copied ${varName}`);
+          return;
+        }
+      }
+      
+      // If no matching variable or it's a multi-select copy
+      await navigator.clipboard.writeText(text);
+      showNotification("success", varName ? `Copied ${varName}` : "Copied to clipboard");
     } catch (err) {
-      showNotification("error", "Failed to copy to clipboard")
+      showNotification("error", "Failed to copy to clipboard");
     }
   }
 
@@ -447,9 +557,30 @@ export default function EnvDashboard() {
     }
   }, [])
 
+  // Add a useEffect to update the countdown timer every second when rate limited
+  useEffect(() => {
+    if (isRateLimited) {
+      // Update the timer immediately
+      setRateLimitTimeRemaining(getRateLimitTimeRemaining());
+      
+      // Then update it every second
+      const intervalId = setInterval(() => {
+        const remaining = getRateLimitTimeRemaining();
+        setRateLimitTimeRemaining(remaining);
+        
+        // If the time is up, clear the interval
+        if (remaining === '') {
+          clearInterval(intervalId);
+        }
+      }, 1000);
+      
+      return () => clearInterval(intervalId);
+    }
+  }, [isRateLimited]);
+
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen bg-[#0c0c0c] p-8">
+      <div className="min-h-screen bg-[#0c0c0c] p-3 sm:p-5 md:p-8">
         <div className="mx-auto max-w-md">
           <div className="border border-zinc-800 bg-zinc-900/50 backdrop-blur-sm">
             <div className="p-6 text-center border-b border-zinc-800">
@@ -478,7 +609,8 @@ export default function EnvDashboard() {
               {error && <p className="text-sm text-red-400 text-center font-medium">{error}</p>}
               {isRateLimited && (
                 <p className="text-sm text-amber-400 text-center font-medium">
-                  Account temporarily locked due to failed attempts
+                  Account temporarily locked due to failed attempts.<br />
+                  Try again in {rateLimitTimeRemaining}.
                 </p>
               )}
               
@@ -527,50 +659,51 @@ export default function EnvDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0c0c0c] p-8">
+    <div className="min-h-screen bg-[#0c0c0c] p-3 sm:p-5 md:p-8">
       <div className="mx-auto max-w-7xl">
         {/* Header */}
-        <div className="flex items-center justify-between mb-8 pb-6 border-b border-zinc-800">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8 pb-6 border-b border-zinc-800">
           <div>
-            <h1 className="text-3xl font-bold text-white tracking-tight">Environment Variables</h1>
+            <h1 className="text-2xl sm:text-3xl font-bold text-white tracking-tight">Environment Variables</h1>
             <p className="text-zinc-400 mt-1">Secure environment variable management</p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2">
             <a
               href="https://grvx.dev/support"
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition-colors"
+              className="flex items-center gap-2 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition-colors"
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
                 <path d="M12 21.35L10.55 20.03C5.4 15.36 2 12.28 2 8.5C2 5.42 4.42 3 7.5 3C9.24 3 10.91 3.81 12 5.09C13.09 3.81 14.76 3 16.5 3C19.58 3 22 5.42 22 8.5C22 12.28 18.6 15.36 13.45 20.04L12 21.35Z" />
               </svg>
-              Donate
+              <span className="hidden sm:inline">Donate</span>
             </a>
-            <div className="px-3 py-1 text-xs font-medium border bg-emerald-500/10 border-emerald-500 text-emerald-400">
+            <div className="hidden sm:block px-3 py-1 text-xs font-medium border bg-emerald-500/10 border-emerald-500 text-emerald-400">
               AUTHENTICATED
             </div>
             <button
               onClick={() => setShowChangePassword(true)}
-              className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-white text-sm font-medium transition-colors flex items-center gap-2"
+              className="px-3 py-2 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-white text-sm font-medium transition-colors flex items-center gap-2"
             >
               <Settings className="h-4 w-4" />
-              Change Password
+              <span className="hidden sm:inline">Change Password</span>
+              <span className="sm:hidden">Settings</span>
             </button>
             <button
               onClick={handleLogout}
-              className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-white text-sm font-medium transition-colors flex items-center gap-2"
+              className="px-3 py-2 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-white text-sm font-medium transition-colors flex items-center gap-2"
             >
               <LogOut className="h-4 w-4" />
-              Logout
+              <span className="hidden sm:inline">Logout</span>
             </button>
           </div>
         </div>
 
         {/* Search and Controls */}
         <div className="mb-6 space-y-4">
-          <div className="flex items-center gap-4">
-            <div className="relative flex-1 max-w-md">
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="relative flex-1 min-w-[200px]">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-zinc-400" />
               <input
                 type="text"
@@ -580,33 +713,35 @@ export default function EnvDashboard() {
                 className="pl-10 w-full bg-zinc-950 border border-zinc-700 text-white px-4 py-2 focus:outline-none focus:border-emerald-400 transition-colors"
               />
             </div>
-            <button
-              onClick={selectAll}
-              className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-300 text-sm font-medium transition-colors flex items-center gap-2"
-            >
-              {selectedVars.size === filteredEnvVars.length ? (
-                <CheckSquare className="h-4 w-4" />
-              ) : (
-                <Square className="h-4 w-4" />
-              )}
-              Select All
-            </button>
-            {selectedVars.size > 0 && (
+            <div className="flex flex-wrap items-center gap-2">
               <button
-                onClick={copySelected}
-                className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-black text-sm font-medium transition-colors flex items-center gap-2"
+                onClick={selectAll}
+                className="px-3 py-2 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-300 text-sm font-medium transition-colors flex items-center gap-2"
               >
-                <Download className="h-4 w-4" />
-                Copy Selected ({selectedVars.size})
+                {selectedVars.size === filteredEnvVars.length ? (
+                  <CheckSquare className="h-4 w-4" />
+                ) : (
+                  <Square className="h-4 w-4" />
+                )}
+                <span className="hidden sm:inline">Select All</span>
               </button>
-            )}
-            <button
-              onClick={() => setShowAddEnvVar(true)}
-              className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium transition-colors flex items-center gap-2"
-            >
-              <Plus className="h-4 w-4" />
-              Add Variable
-            </button>
+              {selectedVars.size > 0 && (
+                <button
+                  onClick={copySelected}
+                  className="px-3 py-2 bg-emerald-500 hover:bg-emerald-600 text-black text-sm font-medium transition-colors flex items-center gap-2"
+                >
+                  <Download className="h-4 w-4" />
+                  <span className="hidden sm:inline">Copy</span> ({selectedVars.size})
+                </button>
+              )}
+              <button
+                onClick={() => setShowAddEnvVar(true)}
+                className="px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium transition-colors flex items-center gap-2"
+              >
+                <Plus className="h-4 w-4" />
+                <span className="hidden sm:inline">Add</span> Variable
+              </button>
+            </div>
           </div>
         </div>
 
@@ -621,15 +756,15 @@ export default function EnvDashboard() {
                 <div className="flex items-center gap-4">
                   <button
                     onClick={() => toggleSelection(envVar.id)}
-                    className="flex items-center justify-center w-5 h-5 border border-zinc-600 bg-transparent hover:bg-zinc-800 transition-colors"
+                    className="flex-shrink-0 flex items-center justify-center w-5 h-5 border border-zinc-600 bg-transparent hover:bg-zinc-800 transition-colors"
                   >
                     {selectedVars.has(envVar.id) && <CheckSquare className="h-4 w-4 text-emerald-400" />}
                   </button>
 
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between mb-2">
-                      <h3 className="text-sm font-semibold text-white tracking-wide font-mono">{envVar.name}</h3>
-                      <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                      <h3 className="text-sm font-semibold text-white tracking-wide font-mono break-all">{envVar.name}</h3>
+                      <div className="flex flex-wrap items-center gap-2">
                         <button
                           onClick={() => toggleVisibility(envVar.id)}
                           className="h-8 w-8 p-0 text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors flex items-center justify-center"
@@ -657,11 +792,11 @@ export default function EnvDashboard() {
                       </div>
                     </div>
 
-                    <div className="bg-zinc-950 border border-zinc-700 p-3 font-mono text-sm">
+                    <div className="bg-zinc-950 border border-zinc-700 p-3 font-mono text-sm overflow-x-auto">
                       {envVar.isVisible ? (
-                        <span className="text-white break-all">{envVar.value}</span>
+                        <span className="text-white break-all whitespace-pre-wrap">{envVar.value}</span>
                       ) : (
-                        <span className="text-zinc-500">{"•".repeat(Math.min(envVar.value.length, 40))}</span>
+                        <span className="text-zinc-500 select-none overflow-hidden">{"•".repeat(Math.min(envVar.value.length, 40))}</span>
                       )}
                     </div>
                   </div>
@@ -679,34 +814,34 @@ export default function EnvDashboard() {
         )}
 
         {/* Stats */}
-        <div className="mt-8 grid gap-6 md:grid-cols-3">
+        <div className="mt-8 grid grid-cols-2 md:grid-cols-3 gap-3 sm:gap-6">
           <div className="border border-zinc-800 bg-zinc-900/50 backdrop-blur-sm">
-            <div className="flex items-center justify-between p-4 border-b border-zinc-800">
-              <h3 className="text-sm font-semibold text-white tracking-wide">TOTAL VARIABLES</h3>
+            <div className="flex items-center justify-between p-3 sm:p-4 border-b border-zinc-800">
+              <h3 className="text-xs sm:text-sm font-semibold text-white tracking-wide">TOTAL VARS</h3>
               <Key className="h-4 w-4 text-emerald-400" />
             </div>
-            <div className="p-4">
-              <span className="text-2xl font-bold text-white font-mono">{envVars.length}</span>
+            <div className="p-3 sm:p-4">
+              <span className="text-xl sm:text-2xl font-bold text-white font-mono">{envVars.length}</span>
             </div>
           </div>
 
           <div className="border border-zinc-800 bg-zinc-900/50 backdrop-blur-sm">
-            <div className="flex items-center justify-between p-4 border-b border-zinc-800">
-              <h3 className="text-sm font-semibold text-white tracking-wide">SELECTED</h3>
+            <div className="flex items-center justify-between p-3 sm:p-4 border-b border-zinc-800">
+              <h3 className="text-xs sm:text-sm font-semibold text-white tracking-wide">SELECTED</h3>
               <CheckSquare className="h-4 w-4 text-cyan-400" />
             </div>
-            <div className="p-4">
-              <span className="text-2xl font-bold text-white font-mono">{selectedVars.size}</span>
+            <div className="p-3 sm:p-4">
+              <span className="text-xl sm:text-2xl font-bold text-white font-mono">{selectedVars.size}</span>
             </div>
           </div>
 
-          <div className="border border-zinc-800 bg-zinc-900/50 backdrop-blur-sm">
-            <div className="flex items-center justify-between p-4 border-b border-zinc-800">
-              <h3 className="text-sm font-semibold text-white tracking-wide">FILTERED</h3>
+          <div className="col-span-2 md:col-span-1 border border-zinc-800 bg-zinc-900/50 backdrop-blur-sm">
+            <div className="flex items-center justify-between p-3 sm:p-4 border-b border-zinc-800">
+              <h3 className="text-xs sm:text-sm font-semibold text-white tracking-wide">FILTERED</h3>
               <Search className="h-4 w-4 text-blue-400" />
             </div>
-            <div className="p-4">
-              <span className="text-2xl font-bold text-white font-mono">{filteredEnvVars.length}</span>
+            <div className="p-3 sm:p-4">
+              <span className="text-xl sm:text-2xl font-bold text-white font-mono">{filteredEnvVars.length}</span>
             </div>
           </div>
         </div>
@@ -747,8 +882,8 @@ export default function EnvDashboard() {
 
       {/* Change Password Modal */}
       {showChangePassword && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40 flex items-center justify-center p-4">
-          <div className="bg-zinc-900 border border-zinc-800 max-w-md w-full">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40 flex items-center justify-center p-2 sm:p-4">
+          <div className="bg-zinc-900 border border-zinc-800 max-w-md w-full overflow-y-auto max-h-[90vh]">
             <div className="p-6 border-b border-zinc-800">
               <h3 className="text-xl font-bold text-white tracking-tight">Change Password</h3>
               <p className="text-zinc-400 mt-1 text-sm">Update your admin password</p>
@@ -813,8 +948,8 @@ export default function EnvDashboard() {
 
       {/* Add Environment Variable Modal */}
       {showAddEnvVar && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40 flex items-center justify-center p-4">
-          <div className="bg-zinc-900 border border-zinc-800 max-w-md w-full">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40 flex items-center justify-center p-2 sm:p-4">
+          <div className="bg-zinc-900 border border-zinc-800 max-w-md w-full overflow-y-auto max-h-[90vh]">
             <div className="p-6 border-b border-zinc-800">
               <h3 className="text-xl font-bold text-white tracking-tight">Add Environment Variable</h3>
               <p className="text-zinc-400 mt-1 text-sm">Add a new environment variable</p>
@@ -981,8 +1116,8 @@ export default function EnvDashboard() {
 
       {/* Edit Environment Variable Modal */}
       {showEditEnvVar && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40 flex items-center justify-center p-4">
-          <div className="bg-zinc-900 border border-zinc-800 max-w-md w-full">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40 flex items-center justify-center p-2 sm:p-4">
+          <div className="bg-zinc-900 border border-zinc-800 max-w-md w-full overflow-y-auto max-h-[90vh]">
             <div className="p-6 border-b border-zinc-800">
               <h3 className="text-xl font-bold text-white tracking-tight">Edit Environment Variable</h3>
               <p className="text-zinc-400 mt-1 text-sm">Update environment variable</p>

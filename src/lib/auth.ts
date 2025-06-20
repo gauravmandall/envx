@@ -64,24 +64,42 @@ export async function saveAdminCredentials(password: string): Promise<void> {
  * Get admin credentials from the database
  */
 export async function getAdminCredentials() {
-  return prisma.adminCredential.findUnique({
-    where: { id: 'admin' }
-  });
+  try {
+    return await prisma.adminCredential.findUnique({
+      where: { id: 'admin' }
+    });
+  } catch (err) {
+    console.error('Error fetching admin credentials:', err);
+    return null;
+  }
 }
 
 /**
  * Verify admin password
  */
 export async function verifyAdminPassword(password: string): Promise<boolean> {
-  // Get admin credentials from database
-  const credentials = await getAdminCredentials();
-  
-  // Fall back to environment variable if no credentials in database
-  if (!credentials) {
+  try {
+    // Get admin credentials from database
+    const credentials = await getAdminCredentials();
+    
+    // Fall back to environment variable if no credentials in database
+    if (!credentials) {
+      console.log('No admin credentials found, falling back to environment variable');
+      const envPassword = process.env.ADMIN_PASSWORD || 'secure123';
+      console.log('Using password from env vars or default:', envPassword.replace(/./g, '*'));
+      console.log('Comparing with provided password:', password.replace(/./g, '*'));
+      return password === envPassword;
+    }
+    
+    // Verify with hashed password
+    console.log('Found admin credentials in database, using hashed password verification');
+    const isValid = verifyPassword(password, credentials.hashedPassword, credentials.salt);
+    console.log('Password verification result:', isValid ? 'VALID' : 'INVALID');
+    return isValid;
+  } catch (err) {
+    console.error('Error during password verification:', err);
+    // Fall back to environment variable in case of error
     const envPassword = process.env.ADMIN_PASSWORD || 'secure123';
     return password === envPassword;
   }
-  
-  // Verify with hashed password
-  return verifyPassword(password, credentials.hashedPassword, credentials.salt);
 } 
